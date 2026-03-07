@@ -1,0 +1,30 @@
+{
+  "trading": {
+    "symbol": "ETHUSDT",
+    "side": "Buy",
+    "leverage": 4,
+    "take_profit_pct": 1.0,
+    "max_entries": 5,
+    "entry_step_pct": 2.0,
+    "position_size_pct": 5.0,
+    "working_deposit": 1000
+  },
+  "risk": {
+    "max_position_pct_of_balance": 95,
+    "check_liquidation": true,
+    "allow_short": false
+  },
+  "notifications": {
+    "on_entry": true,
+    "on_exit": true,
+    "on_error": true,
+    "daily_summary": true,
+    "daily_summary_hour": 21
+  },
+  "bot": {
+    "reconnect_attempts": 10,
+    "reconnect_delay_sec": 5,
+    "log_level": "INFO",
+    "log_file": "logs/bot.log"
+  }
+}

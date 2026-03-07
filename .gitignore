@@ -1,0 +1,28 @@
+# Зависимости
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# Переменные окружения
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Логи
+*.log
+logs/
+
+# Временные файлы
+~$*
+*.tmp
+*.bak
