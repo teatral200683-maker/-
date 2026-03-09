@@ -100,6 +100,20 @@ class TradingStrategy:
                     return trade
                 return
 
+            # ── Логика стоп-лосса ──
+            if self.pm.should_stop_loss(price):
+                sl_price = self.pm.current_trade.avg_entry_price * (1 - self.pm.stop_loss_pct / 100)
+                logger.warning(
+                    f"🛑 СТОП-ЛОСС! Цена ${price:,.2f} ≤ ${sl_price:,.2f} "
+                    f"(-{self.pm.stop_loss_pct}% от средней ${self.pm.current_trade.avg_entry_price:,.2f})"
+                )
+                trade = await self.pm.close_position(price)
+                if trade:
+                    self._highest_price = price  # Сброс максимума
+                    self._last_trade_time = time.time()
+                    return trade
+                return
+
         # ── Логика входа / усреднения ──
         if self.pm.has_position:
             # Усреднение: цена упала на entry_step_pct%

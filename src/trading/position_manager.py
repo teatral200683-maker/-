@@ -31,6 +31,7 @@ class PositionManager:
         symbol: str = "ETHUSDT",
         leverage: int = 4,
         take_profit_pct: float = 1.0,
+        stop_loss_pct: float = 5.0,
         position_size_pct: float = 5.0,
     ):
         self.client = client
@@ -39,6 +40,7 @@ class PositionManager:
         self.symbol = symbol
         self.leverage = leverage
         self.take_profit_pct = take_profit_pct
+        self.stop_loss_pct = stop_loss_pct
         self.position_size_pct = position_size_pct
 
         # Текущая открытая сделка
@@ -313,6 +315,24 @@ class PositionManager:
 
         tp_price = self.current_trade.calculate_take_profit_price(self.take_profit_pct)
         return current_price >= tp_price
+
+    def should_stop_loss(self, current_price: float) -> bool:
+        """
+        Проверить, достигнут ли стоп-лосс.
+
+        Закрывает позицию если цена упала ниже stop_loss_pct% от средней входной.
+
+        Args:
+            current_price: Текущая цена
+
+        Returns:
+            True если пора закрывать с убытком
+        """
+        if self.current_trade is None:
+            return False
+
+        sl_price = self.current_trade.avg_entry_price * (1 - self.stop_loss_pct / 100)
+        return current_price <= sl_price
 
     @property
     def has_position(self) -> bool:

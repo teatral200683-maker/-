@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Данные (монтируются как volumes)
+data/
+logs/
+
+# Тесты и утилиты
+test_all.py
+backtester.py
+download_data.py
+optimizer.py
+
+# Документация
+*.md
+*.docx
+
+# Секреты (НИКОГДА не в образе!)
+.env
+.env.*

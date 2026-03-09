@@ -79,6 +79,7 @@ class BotEngine:
             symbol=config.trading.symbol,
             leverage=config.trading.leverage,
             take_profit_pct=config.trading.take_profit_pct,
+            stop_loss_pct=config.trading.stop_loss_pct,
             position_size_pct=config.trading.position_size_pct,
         )
 
@@ -157,8 +158,9 @@ class BotEngine:
         self._started_at = datetime.utcnow()
 
         logger.info("=" * 50)
-        logger.info("🤖 CRYPTO TRADER BOT v1.0")
+        logger.info("🤖 CRYPTO TRADER BOT v1.1")
         logger.info("=" * 50)
+        logger.info(f"🛡️ Стоп-лосс: {self.config.trading.stop_loss_pct}%")
 
         # Предполётные проверки
         if not await self._pre_flight_checks():

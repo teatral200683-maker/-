@@ -38,6 +38,7 @@ class BybitClient:
             testnet=testnet,
             api_key=api_key,
             api_secret=api_secret,
+            recv_window=20000,
         )
         mode = "TESTNET" if testnet else "MAINNET"
         logger.info(f"Bybit клиент инициализирован ({mode})")
@@ -235,36 +236,47 @@ class BybitClient:
             logger.error("🛑 ЗАПРЕТ: нельзя открывать SELL без reduce_only (защита от шорта)")
             raise ValueError("Шорт запрещён! Для закрытия позиции используйте reduce_only=True")
 
-        try:
-            params = {
-                "category": "linear",
-                "symbol": symbol,
-                "side": side,
-                "orderType": order_type,
-                "qty": qty,
-                "timeInForce": "GTC",
-            }
-            if reduce_only:
-                params["reduceOnly"] = True
+        params = {
+            "category": "linear",
+            "symbol": symbol,
+            "side": side,
+            "orderType": order_type,
+            "qty": qty,
+            "timeInForce": "GTC",
+        }
+        if reduce_only:
+            params["reduceOnly"] = True
 
-            result = self.session.place_order(**params)
+        # Retry-логика для транзиентных ошибок (30208: maxTradePrice на Testnet)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                result = self.session.place_order(**params)
 
-            if result["retCode"] == 0:
-                order_id = result["result"]["orderId"]
-                logger.info(
-                    f"✅ Ордер размещён: {side} {qty} {symbol} "
-                    f"({order_type}, reduce_only={reduce_only}) "
-                    f"ID: {order_id}"
-                )
-                return order_id
-            else:
-                logger.error(f"Ошибка размещения ордера: {result['retMsg']}")
+                if result["retCode"] == 0:
+                    order_id = result["result"]["orderId"]
+                    logger.info(
+                        f"✅ Ордер размещён: {side} {qty} {symbol} "
+                        f"({order_type}, reduce_only={reduce_only}) "
+                        f"ID: {order_id}"
+                    )
+                    return order_id
+                else:
+                    logger.error(f"Ошибка размещения ордера: {result['retMsg']}")
+                    return None
+            except ValueError:
+                raise
+            except Exception as e:
+                err_str = str(e)
+                # 30208 = транзиентная ошибка maxTradePrice (Testnet)
+                if "30208" in err_str and attempt < max_retries - 1:
+                    logger.warning(
+                        f"⚠️ Ордер отклонён (30208), повтор {attempt + 2}/{max_retries} через 1с..."
+                    )
+                    time.sleep(1)
+                    continue
+                logger.error(f"Исключение при размещении ордера: {e}")
                 return None
-        except ValueError:
-            raise
-        except Exception as e:
-            logger.error(f"Исключение при размещении ордера: {e}")
-            return None
 
     def get_execution_details(self, symbol: str, order_id: str) -> dict:
         """

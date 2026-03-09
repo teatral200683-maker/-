@@ -25,6 +25,7 @@ class TradingConfig:
     side: str = "Buy"
     leverage: int = 4
     take_profit_pct: float = 1.0
+    stop_loss_pct: float = 5.0          # Стоп-лосс: -5% от средней цены → закрытие
     max_entries: int = 5
     entry_step_pct: float = 2.0
     position_size_pct: float = 5.0
