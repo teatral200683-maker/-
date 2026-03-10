@@ -5,7 +5,7 @@ Dataclass-модели для сделок, входов и статистики
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 
 
@@ -15,7 +15,7 @@ class Entry:
     id: Optional[int] = None
     trade_id: Optional[int] = None
     entry_number: int = 1                       # 1–5
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     price: float = 0.0                          # Цена входа
     qty: float = 0.0                            # Объём в монетах
     order_id: str = ""                          # ID ордера на бирже
@@ -25,7 +25,7 @@ class Entry:
 class Trade:
     """Один полный торговый цикл (от первого входа до закрытия)."""
     id: Optional[int] = None
-    opened_at: datetime = field(default_factory=datetime.utcnow)
+    opened_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None
     symbol: str = "ETHUSDT"
     side: str = "Buy"
@@ -89,7 +89,7 @@ class Trade:
             exit_price: Цена выхода
             commission: Суммарная комиссия
         """
-        self.closed_at = datetime.utcnow()
+        self.closed_at = datetime.now(timezone.utc)
         self.exit_price = exit_price
         self.status = "closed"
         self.commission = commission

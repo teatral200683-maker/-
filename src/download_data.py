@@ -14,7 +14,7 @@ import csv
 import os
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 try:
     import requests
@@ -75,8 +75,8 @@ def download_klines(
     print(f"  Файл:      {output}")
 
     # Расчёт временных границ
-    end_ts = int(datetime.utcnow().timestamp() * 1000)
-    start_ts = int((datetime.utcnow() - timedelta(days=days)).timestamp() * 1000)
+    end_ts = int(datetime.now(timezone.utc).timestamp() * 1000)
+    start_ts = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
 
     all_candles = []
     current_end = end_ts
@@ -110,7 +110,7 @@ def download_klines(
                     continue
                 all_candles.append({
                     "timestamp": ts,
-                    "datetime": datetime.utcfromtimestamp(ts / 1000).strftime("%Y-%m-%d %H:%M:%S"),
+                    "datetime": datetime.fromtimestamp(ts / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
                     "open": float(k[1]),
                     "high": float(k[2]),
                     "low": float(k[3]),
@@ -122,7 +122,7 @@ def download_klines(
             current_end = int(klines[-1][0]) - 1
 
             if batch % 5 == 0:
-                oldest = datetime.utcfromtimestamp(int(klines[-1][0]) / 1000)
+                oldest = datetime.fromtimestamp(int(klines[-1][0]) / 1000, tz=timezone.utc)
                 print(f"  ▶ Пакет {batch}: {len(all_candles):,} свечей (до {oldest.strftime('%Y-%m-%d')})")
 
             time.sleep(0.1)  # Не превышаем лимит API

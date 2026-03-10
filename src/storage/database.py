@@ -7,7 +7,7 @@ CRUD-операции для сделок, входов и статистики.
 
 import sqlite3
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Optional, List
 
 from storage.models import Trade, Entry, DailyStats
@@ -273,7 +273,7 @@ class Database:
         cursor.execute(
             """INSERT OR REPLACE INTO bot_state (key, value, updated_at)
                VALUES (?, ?, ?)""",
-            (key, value, datetime.utcnow().isoformat()),
+            (key, value, datetime.now(timezone.utc).isoformat()),
         )
         self.conn.commit()
 

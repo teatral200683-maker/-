@@ -1,5 +1,23 @@
 # 📝 Changelog — Crypto Trader Bot
 
+## v1.3 (10.03.2026)
+### Added
+- **75 unit-тестов** (pytest) — покрытие ~90% кодовой базы
+- Тесты: Database, Config, Models, TelegramNotifier, BotEngine, BybitClient
+- `src/tests/conftest.py` — общие фикстуры (mock, in-memory SQLite)
+- Все тесты офлайн — API-ключи не нужны
+
+### Fixed
+- **44 DeprecationWarning** — `datetime.utcnow()` → `datetime.now(timezone.utc)`
+- `utcfromtimestamp()` → `fromtimestamp(tz=timezone.utc)` в `download_data.py`
+- Python 3.12+ полная совместимость
+
+### Changed
+- Обновлён README.md — секция тестирования
+- Все модули используют timezone-aware datetime
+
+---
+
 ## v1.1 (09.03.2026)
 ### Added
 - **Стоп-лосс** `-5%` — автозакрытие при убытке ≥ stop_loss_pct% от средней

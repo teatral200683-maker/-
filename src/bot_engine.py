@@ -7,7 +7,7 @@ Bot Engine — Crypto Trader Bot
 import asyncio
 import signal
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from config import Config, load_config, validate_config
 from exchange.client import BybitClient
@@ -155,7 +155,7 @@ class BotEngine:
     async def start(self):
         """Запуск бота."""
         self._running = True
-        self._started_at = datetime.utcnow()
+        self._started_at = datetime.now(timezone.utc)
 
         logger.info("=" * 50)
         logger.info("🤖 CRYPTO TRADER BOT v1.1")
@@ -217,7 +217,7 @@ class BotEngine:
         # Вычисляем uptime
         uptime = ""
         if self._started_at:
-            delta = datetime.utcnow() - self._started_at
+            delta = datetime.now(timezone.utc) - self._started_at
             hours, remainder = divmod(int(delta.total_seconds()), 3600)
             minutes = remainder // 60
             uptime = f"{hours}ч {minutes}мин"
@@ -333,7 +333,7 @@ class BotEngine:
             # Uptime
             uptime = "N/A"
             if self._started_at:
-                delta = datetime.utcnow() - self._started_at
+                delta = datetime.now(timezone.utc) - self._started_at
                 hours, remainder = divmod(int(delta.total_seconds()), 3600)
                 minutes = remainder // 60
                 uptime = f"{hours}ч {minutes}мин"

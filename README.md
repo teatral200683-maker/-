@@ -150,6 +150,28 @@ python main.py check-config    # Валидация конфигурации
 
 ---
 
+## 🧪 Тесты
+
+**75 тестов** (pytest), покрытие ~90%:
+
+```bash
+cd src
+python -m pytest tests/ -v     # 75/75 PASSED, 0 warnings
+```
+
+| Модуль | Тестов | Что покрыто |
+|---|---|---|
+| `storage/database.py` | 16 | CRUD, статистика, state |
+| `config.py` | 14 | Загрузка, валидация, безопасность |
+| `storage/models.py` | 14 | DCA-усреднение, PnL, TP |
+| `exchange/client.py` | 13 | Retry 30208, защита от шорта |
+| `notifications/telegram.py` | 11 | Форматирование всех шаблонов |
+| `bot_engine.py` | 10 | Обработка цены, pre-flight |
+
+> Все тесты офлайн — mock + in-memory SQLite. API-ключи не нужны.
+
+---
+
 ## ⚠️ Безопасность
 
 - 🔒 API-ключ **без прав вывода** (проверка при старте)

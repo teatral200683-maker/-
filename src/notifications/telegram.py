@@ -6,7 +6,7 @@ Telegram-уведомления — Crypto Trader Bot
 
 import asyncio
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from utils.logger import get_logger
 
@@ -62,7 +62,7 @@ class TelegramNotifier:
     async def notify_bot_started(self, balance: float, symbol: str, leverage: int, tp_pct: float, testnet: bool):
         """Уведомление: бот запущен."""
         mode = "TESTNET" if testnet else "MAINNET"
-        now = datetime.utcnow().strftime("%d.%m.%Y %H:%M:%S UTC")
+        now = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M:%S UTC")
         text = (
             f"✅ <b>БОТ ЗАПУЩЕН</b>\n\n"
             f"📍 Режим: {mode}\n"
@@ -82,7 +82,7 @@ class TelegramNotifier:
         total_value: float,
     ):
         """Уведомление: вход в позицию."""
-        now = datetime.utcnow().strftime("%d.%m.%Y %H:%M:%S")
+        now = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M:%S")
         value = price * qty
         text = (
             f"🟢 <b>ВХОД В ПОЗИЦИЮ #{entry_num}/{max_entries}</b>\n\n"
@@ -103,7 +103,7 @@ class TelegramNotifier:
         balance: float, duration: str,
     ):
         """Уведомление: сделка закрыта."""
-        now = datetime.utcnow().strftime("%d.%m.%Y %H:%M:%S")
+        now = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M:%S")
         text = (
             f"💰 <b>СДЕЛКА ЗАКРЫТА</b>\n\n"
             f"📈 {symbol}\n"
@@ -125,7 +125,7 @@ class TelegramNotifier:
         avg_price: float, tp_price: float, total_value: float,
     ):
         """Уведомление: достигнут максимум входов."""
-        now = datetime.utcnow().strftime("%d.%m.%Y %H:%M:%S")
+        now = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M:%S")
         text = (
             f"⚠️ <b>МАКСИМУМ ВХОДОВ ДОСТИГНУТ</b>\n\n"
             f"📈 {symbol}\n"
@@ -141,7 +141,7 @@ class TelegramNotifier:
 
     async def notify_error(self, error_type: str, message: str, attempt: int = 0):
         """Уведомление: ошибка."""
-        now = datetime.utcnow().strftime("%d.%m.%Y %H:%M:%S")
+        now = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M:%S")
         attempt_text = f"\n📍 Попытка: {attempt}" if attempt else ""
         text = (
             f"🔴 <b>ОШИБКА</b>\n\n"
