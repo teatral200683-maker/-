@@ -302,67 +302,84 @@ class BotEngine:
                     else:
                         self._period_losing_pnl += net
 
-                    # Вычисляем длительность
-                    duration = "—"
-                    if result.opened_at and result.closed_at:
-                        delta = result.closed_at - result.opened_at
-                        hours, remainder = divmod(int(delta.total_seconds()), 3600)
-                        minutes = remainder // 60
-                        if hours >= 24:
-                            days = hours // 24
-                            hours = hours % 24
-                            duration = f"{days}д {hours}ч {minutes}мин"
-                        else:
-                            duration = f"{hours}ч {minutes}мин"
+                    try:
+                        # Вычисляем длительность
+                        duration = "—"
+                        if result.opened_at and result.closed_at:
+                            delta = result.closed_at - result.opened_at
+                            hours, remainder = divmod(int(delta.total_seconds()), 3600)
+                            minutes = remainder // 60
+                            if hours >= 24:
+                                days = hours // 24
+                                hours = hours % 24
+                                duration = f"{days}д {hours}ч {minutes}мин"
+                            else:
+                                duration = f"{hours}ч {minutes}мин"
 
-                    # Баланс
-                    wallet = self.client.get_wallet_balance()
-                    balance = wallet.get("totalEquity", 0) if wallet else 0
+                        # Баланс
+                        balance = 0
+                        try:
+                            wallet = self.client.get_wallet_balance()
+                            balance = wallet.get("totalEquity", 0) if wallet else 0
+                        except Exception as e:
+                            logger.warning(f"Не удалось получить баланс: {e}")
 
-                    await self.notifier.notify_exit(
-                        symbol=self.config.trading.symbol,
-                        exit_price=result.exit_price or 0,
-                        entries=result.entries_count,
-                        pnl=result.pnl or 0,
-                        commission=result.commission or 0,
-                        net_pnl=result.net_pnl or 0,
-                        balance=balance,
-                        duration=duration,
-                    )
+                        await self.notifier.notify_exit(
+                            symbol=self.config.trading.symbol,
+                            exit_price=result.exit_price or 0,
+                            entries=result.entries_count,
+                            pnl=result.pnl or 0,
+                            commission=result.commission or 0,
+                            net_pnl=result.net_pnl or 0,
+                            balance=balance,
+                            duration=duration,
+                        )
+                        logger.info("📲 Уведомление о закрытии отправлено")
+                    except Exception as e:
+                        logger.error(f"❌ Ошибка отправки уведомления о закрытии: {e}", exc_info=True)
+
                 else:
                     # Новая позиция — уведомляем
                     self._period_trades_opened += 1
-                    entry = result.entries[0] if result.entries else None
-                    if entry:
-                        tp_price = result.avg_entry_price * (1 + self.config.trading.take_profit_pct / 100)
-                        total_value = result.total_qty * result.avg_entry_price
-                        await self.notifier.notify_entry(
-                            entry_num=1,
-                            max_entries=self.config.trading.max_entries,
-                            symbol=self.config.trading.symbol,
-                            price=entry.price,
-                            qty=entry.qty,
-                            avg_price=result.avg_entry_price,
-                            tp_price=tp_price,
-                            total_value=total_value,
-                        )
+                    try:
+                        entry = result.entries[0] if result.entries else None
+                        if entry:
+                            tp_price = result.avg_entry_price * (1 + self.config.trading.take_profit_pct / 100)
+                            total_value = result.total_qty * result.avg_entry_price
+                            await self.notifier.notify_entry(
+                                entry_num=1,
+                                max_entries=self.config.trading.max_entries,
+                                symbol=self.config.trading.symbol,
+                                price=entry.price,
+                                qty=entry.qty,
+                                avg_price=result.avg_entry_price,
+                                tp_price=tp_price,
+                                total_value=total_value,
+                            )
+                            logger.info("📲 Уведомление о входе отправлено")
+                    except Exception as e:
+                        logger.error(f"❌ Ошибка отправки уведомления о входе: {e}", exc_info=True)
 
             elif isinstance(result, Entry):
                 # Усреднение — тоже уведомляем
-                trade = self.position_manager.current_trade
-                if trade:
-                    tp_price = trade.avg_entry_price * (1 + self.config.trading.take_profit_pct / 100)
-                    total_value = trade.total_qty * trade.avg_entry_price
-                    await self.notifier.notify_entry(
-                        entry_num=result.entry_number,
-                        max_entries=self.config.trading.max_entries,
-                        symbol=self.config.trading.symbol,
-                        price=result.price,
-                        qty=result.qty,
-                        avg_price=trade.avg_entry_price,
-                        tp_price=tp_price,
-                        total_value=total_value,
-                    )
+                try:
+                    trade = self.position_manager.current_trade
+                    if trade:
+                        tp_price = trade.avg_entry_price * (1 + self.config.trading.take_profit_pct / 100)
+                        total_value = trade.total_qty * trade.avg_entry_price
+                        await self.notifier.notify_entry(
+                            entry_num=result.entry_number,
+                            max_entries=self.config.trading.max_entries,
+                            symbol=self.config.trading.symbol,
+                            price=result.price,
+                            qty=result.qty,
+                            avg_price=trade.avg_entry_price,
+                            tp_price=tp_price,
+                            total_value=total_value,
+                        )
+                        logger.info("📲 Уведомление о DCA отправлено")
+                except Exception as e:
+                    logger.error(f"❌ Ошибка отправки уведомления о DCA: {e}", exc_info=True)
 
     async def _on_ws_error(self, error_type: str, message: str, attempt: int):
         """Обработчик ошибок WebSocket — сразу в Telegram + копим для сводки."""
