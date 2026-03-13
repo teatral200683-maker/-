@@ -37,6 +37,13 @@ class TestOnPrice:
             engine._running = True
             engine._session_trades = 0
             engine._session_pnl = 0.0
+            # Периодическая сводка
+            engine._period_trades_opened = 0
+            engine._period_trades_closed = 0
+            engine._period_winning_pnl = 0.0
+            engine._period_losing_pnl = 0.0
+            engine._period_errors = 0
+            engine._period_error_types = []
             return engine
 
     def test_no_action(self, mock_client, mock_notifier):
@@ -65,7 +72,7 @@ class TestOnPrice:
         )
         engine.strategy.on_price_update = AsyncMock(return_value=new_trade)
         asyncio.run(engine._on_price(2000.0, {}))
-        mock_notifier.notify_entry.assert_called_once()
+        assert engine._period_trades_opened == 1
 
     def test_closed_trade_notify_exit(self, mock_client, mock_notifier):
         """Закрытая сделка → notify_exit + инкремент session_trades."""
@@ -86,12 +93,13 @@ class TestOnPrice:
         closed_trade.closed_at = datetime(2026, 3, 10, 12, 30, 0)
         engine.strategy.on_price_update = AsyncMock(return_value=closed_trade)
         asyncio.run(engine._on_price(2000.0, {}))
-        mock_notifier.notify_exit.assert_called_once()
+        assert engine._period_trades_closed == 1
         assert engine._session_trades == 1
         assert engine._session_pnl == 31.50
+        assert engine._period_winning_pnl == 31.50
 
-    def test_dca_entry_notify(self, mock_client, mock_notifier):
-        """Усреднение (Entry) → notify_entry."""
+    def test_dca_entry_no_notify(self, mock_client, mock_notifier):
+        """Усреднение (Entry) → НЕ уведомляет (сводка каждые 3 часа)."""
         engine = self._make_engine(mock_client, mock_notifier)
         # Настраиваем current_trade
         current_trade = Trade(
@@ -108,10 +116,10 @@ class TestOnPrice:
         )
         engine.strategy.on_price_update = AsyncMock(return_value=new_entry)
         asyncio.run(engine._on_price(1960.0, {}))
-        mock_notifier.notify_entry.assert_called_once()
+        mock_notifier.notify_entry.assert_not_called()
 
-    def test_max_entries_notify(self, mock_client, mock_notifier):
-        """5/5 входов → notify_max_entries."""
+    def test_max_entries_no_notify(self, mock_client, mock_notifier):
+        """5/5 входов → НЕ уведомляет (сводка каждые 3 часа)."""
         engine = self._make_engine(mock_client, mock_notifier)
         current_trade = Trade(
             entries_count=5,
@@ -124,7 +132,7 @@ class TestOnPrice:
         new_entry = Entry(entry_number=5, price=1840.0, qty=0.20)
         engine.strategy.on_price_update = AsyncMock(return_value=new_entry)
         asyncio.run(engine._on_price(1840.0, {}))
-        mock_notifier.notify_max_entries.assert_called_once()
+        mock_notifier.notify_max_entries.assert_not_called()
 
 
 class TestPreFlightChecks:

@@ -177,6 +177,43 @@ class TelegramNotifier:
         )
         await self._send(text)
 
+    async def notify_periodic_summary(
+        self, period_label: str, trades_opened: int, trades_closed: int,
+        winning_pnl: float, losing_pnl: float, balance: float,
+        errors_count: int, error_details: str, uptime: str,
+        has_position: bool, position_info: str,
+    ):
+        """Уведомление: периодическая сводка (каждые 3 часа)."""
+        net_pnl = winning_pnl + losing_pnl  # losing_pnl уже отрицательный
+        errors_line = ""
+        if errors_count > 0:
+            errors_line = (
+                f"\n⚠️ <b>ОШИБКИ: {errors_count}</b>\n"
+                f"{error_details}\n"
+            )
+        elif errors_count == 0:
+            errors_line = "\n✅ Ошибок: нет\n"
+
+        position_line = f"📈 {position_info}" if has_position else "📈 Позиция: нет"
+
+        text = (
+            f"📊 <b>СВОДКА ЗА {period_label}</b>\n\n"
+            f"────────────────────\n"
+            f"🟢 Открыто сделок:  {trades_opened}\n"
+            f"🔴 Закрыто сделок:  {trades_closed}\n"
+            f"────────────────────\n"
+            f"💹 В плюс:  ${winning_pnl:+,.2f}\n"
+            f"📉 В минус: ${losing_pnl:+,.2f}\n"
+            f"✅ Итого:   <b>${net_pnl:+,.2f}</b>\n"
+            f"────────────────────\n"
+            f"💼 Баланс: <b>${balance:,.2f}</b>\n"
+            f"{position_line}\n"
+            f"{errors_line}"
+            f"────────────────────\n"
+            f"⏱ Uptime: {uptime}"
+        )
+        await self._send(text)
+
     async def notify_bot_stopped(self, reason: str, balance: float, session_trades: int, session_pnl: float, uptime: str):
         """Уведомление: бот остановлен."""
         text = (

@@ -118,7 +118,7 @@ class BybitWebSocket:
 
         while self._running and attempt < self.reconnect_attempts:
             try:
-                async with websockets.connect(url, ping_interval=20) as ws:
+                async with websockets.connect(url, ping_interval=20, ping_timeout=30) as ws:
                     self._public_ws = ws
                     logger.info(f"✅ Публичный WebSocket подключён: {url}")
                     attempt = 0  # Сброс при успешном подключении
@@ -145,23 +145,24 @@ class BybitWebSocket:
 
             except websockets.ConnectionClosed as e:
                 attempt += 1
-                delay = self.reconnect_delay * attempt  # Линейная задержка
+                delay = min(self.reconnect_delay * (2 ** (attempt - 1)), 30)  # Exp. backoff, макс 30с
                 logger.warning(
                     f"🔄 Публичный WS разорван: {e}. "
                     f"Переподключение {attempt}/{self.reconnect_attempts} через {delay}с"
                 )
-                if self._on_error:
+                # Уведомление в Telegram только с 3-й попытки (первые 2 — штатный реконнект)
+                if self._on_error and attempt >= 3:
                     await self._on_error("ws_disconnect", str(e), attempt)
                 await asyncio.sleep(delay)
 
             except Exception as e:
                 attempt += 1
-                delay = self.reconnect_delay * attempt
+                delay = min(self.reconnect_delay * (2 ** (attempt - 1)), 30)
                 logger.error(
                     f"🔴 Ошибка публичного WS: {e}. "
                     f"Попытка {attempt}/{self.reconnect_attempts} через {delay}с"
                 )
-                if self._on_error:
+                if self._on_error and attempt >= 3:
                     await self._on_error("ws_error", str(e), attempt)
                 await asyncio.sleep(delay)
 
@@ -177,7 +178,7 @@ class BybitWebSocket:
 
         while self._running and attempt < self.reconnect_attempts:
             try:
-                async with websockets.connect(url, ping_interval=20) as ws:
+                async with websockets.connect(url, ping_interval=20, ping_timeout=30) as ws:
                     self._private_ws = ws
                     logger.info(f"✅ Приватный WebSocket подключён: {url}")
                     attempt = 0
@@ -207,7 +208,7 @@ class BybitWebSocket:
 
             except websockets.ConnectionClosed as e:
                 attempt += 1
-                delay = self.reconnect_delay * attempt
+                delay = min(self.reconnect_delay * (2 ** (attempt - 1)), 30)
                 logger.warning(
                     f"🔄 Приватный WS разорван: {e}. "
                     f"Переподключение {attempt}/{self.reconnect_attempts} через {delay}с"
@@ -216,7 +217,7 @@ class BybitWebSocket:
 
             except Exception as e:
                 attempt += 1
-                delay = self.reconnect_delay * attempt
+                delay = min(self.reconnect_delay * (2 ** (attempt - 1)), 30)
                 logger.error(f"🔴 Ошибка приватного WS: {e}. Попытка {attempt}/{self.reconnect_attempts}")
                 await asyncio.sleep(delay)
 

@@ -265,10 +265,11 @@ class PositionManager:
         trade = self.current_trade
 
         # Размещаем SELL ордер (reduce_only!)
+        close_qty = round(trade.total_qty, 2)  # округление: защита от float-артефактов
         order_id = self.client.place_order(
             symbol=self.symbol,
             side="Sell",
-            qty=str(trade.total_qty),
+            qty=str(close_qty),
             order_type="Market",
             reduce_only=True,  # ВАЖНО: только закрытие, не шорт!
         )

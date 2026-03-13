@@ -64,7 +64,7 @@ class Trade:
 
         # Пересчёт средней цены (средневзвешенная)
         total_cost = sum(e.price * e.qty for e in self.entries)
-        self.total_qty = sum(e.qty for e in self.entries)
+        self.total_qty = round(sum(e.qty for e in self.entries), 2)  # округление: защита от float-артефактов
         self.avg_entry_price = total_cost / self.total_qty if self.total_qty > 0 else 0
 
         return entry

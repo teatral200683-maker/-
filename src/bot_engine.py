@@ -31,12 +31,22 @@ class BotEngine:
     обрабатывает graceful shutdown.
     """
 
+    SUMMARY_INTERVAL_SEC = 3 * 3600  # Сводка каждые 3 часа
+
     def __init__(self, config: Config):
         self.config = config
         self._running = False
         self._started_at: datetime = None
         self._session_trades: int = 0
         self._session_pnl: float = 0.0
+
+        # ── Счётчики для периодической сводки ──
+        self._period_trades_opened: int = 0
+        self._period_trades_closed: int = 0
+        self._period_winning_pnl: float = 0.0
+        self._period_losing_pnl: float = 0.0
+        self._period_errors: int = 0
+        self._period_error_types: list = []
 
         # ── Инициализация модулей ──
         # Логирование
@@ -191,11 +201,12 @@ class BotEngine:
         logger.info("Telegram-команды: /stop, /status, /help")
         logger.info("Press Ctrl+C для остановки")
 
-        # Запуск WebSocket + Telegram-команды параллельно
+        # Запуск WebSocket + Telegram-команды + периодическая сводка параллельно
         try:
             await asyncio.gather(
                 self.ws.start(symbol=self.config.trading.symbol),
                 self.commander.start(),
+                self._periodic_summary_task(),
             )
         except asyncio.CancelledError:
             logger.info("Получен сигнал остановки")
@@ -245,7 +256,7 @@ class BotEngine:
 
         result = await self.strategy.on_price_update(price, ticker_data)
 
-        # Если произошла сделка — уведомляем
+        # Если произошла сделка — обновляем счётчики (без уведомлений)
         if result is not None:
             from storage.models import Trade, Entry
 
@@ -254,73 +265,100 @@ class BotEngine:
                     # Сделка закрыта
                     self._session_trades += 1
                     self._session_pnl += result.net_pnl or 0
-
-                    wallet = self.client.get_wallet_balance()
-                    balance = wallet.get("totalEquity", 0) if wallet else 0
-
-                    duration = ""
-                    if result.opened_at and result.closed_at:
-                        delta = result.closed_at - result.opened_at
-                        hours, remainder = divmod(int(delta.total_seconds()), 3600)
-                        minutes = remainder // 60
-                        duration = f"{hours}ч {minutes}мин"
-
-                    await self.notifier.notify_exit(
-                        symbol=result.symbol,
-                        exit_price=result.exit_price,
-                        entries=result.entries_count,
-                        pnl=result.pnl or 0,
-                        commission=result.commission,
-                        net_pnl=result.net_pnl or 0,
-                        balance=balance,
-                        duration=duration,
-                    )
+                    self._period_trades_closed += 1
+                    net = result.net_pnl or 0
+                    if net >= 0:
+                        self._period_winning_pnl += net
+                    else:
+                        self._period_losing_pnl += net
                 else:
                     # Новая позиция
-                    tp = result.calculate_take_profit_price(self.config.trading.take_profit_pct)
-                    total_val = result.total_qty * result.avg_entry_price
-                    await self.notifier.notify_entry(
-                        entry_num=result.entries_count,
-                        max_entries=self.config.trading.max_entries,
-                        symbol=result.symbol,
-                        price=result.avg_entry_price,
-                        qty=result.total_qty,
-                        avg_price=result.avg_entry_price,
-                        tp_price=tp,
-                        total_value=total_val,
-                    )
+                    self._period_trades_opened += 1
 
             elif isinstance(result, Entry):
-                # Усреднение
-                trade = self.position_manager.current_trade
-                if trade:
-                    tp = trade.calculate_take_profit_price(self.config.trading.take_profit_pct)
-                    total_val = trade.total_qty * trade.avg_entry_price
-                    await self.notifier.notify_entry(
-                        entry_num=trade.entries_count,
-                        max_entries=self.config.trading.max_entries,
-                        symbol=trade.symbol,
-                        price=result.price,
-                        qty=result.qty,
-                        avg_price=trade.avg_entry_price,
-                        tp_price=tp,
-                        total_value=total_val,
-                    )
-
-                    # Если макс. входов
-                    if trade.entries_count >= self.risk_manager.max_entries:
-                        await self.notifier.notify_max_entries(
-                            symbol=trade.symbol,
-                            entries=trade.entries_count,
-                            max_entries=self.risk_manager.max_entries,
-                            avg_price=trade.avg_entry_price,
-                            tp_price=tp,
-                            total_value=total_val,
-                        )
+                # Усреднение — не считаем как отдельную сделку
+                pass
 
     async def _on_ws_error(self, error_type: str, message: str, attempt: int):
-        """Обработчик ошибок WebSocket."""
+        """Обработчик ошибок WebSocket — сразу в Telegram + копим для сводки."""
+        self._period_errors += 1
+        short = f"{error_type} (попытка {attempt})"
+        if short not in self._period_error_types:
+            self._period_error_types.append(short)
+        # Ошибки всегда отправляем сразу (websocket.py уже фильтрует первые 2 попытки)
         await self.notifier.notify_error(error_type, message, attempt)
+
+    # ── Периодическая сводка ──────────────────────
+
+    async def _periodic_summary_task(self):
+        """Фоновая задача: отправка сводки каждые 3 часа."""
+        while self._running:
+            await asyncio.sleep(self.SUMMARY_INTERVAL_SEC)
+            if not self._running:
+                break
+            try:
+                await self._send_periodic_summary()
+            except Exception as e:
+                logger.error(f"Ошибка отправки периодической сводки: {e}")
+
+    async def _send_periodic_summary(self):
+        """Собрать и отправить периодическую сводку."""
+        # Uptime
+        uptime = "N/A"
+        if self._started_at:
+            delta = datetime.now(timezone.utc) - self._started_at
+            hours, remainder = divmod(int(delta.total_seconds()), 3600)
+            minutes = remainder // 60
+            uptime = f"{hours}ч {minutes}мин"
+
+        # Баланс
+        wallet = self.client.get_wallet_balance()
+        balance = wallet.get("totalEquity", 0) if wallet else 0
+
+        # Позиция
+        has_position = self.position_manager.has_position
+        position_info = ""
+        if has_position:
+            trade = self.position_manager.current_trade
+            if trade:
+                tp = trade.calculate_take_profit_price(self.config.trading.take_profit_pct)
+                position_info = (
+                    f"{trade.entries_count} вх., "
+                    f"средняя ${trade.avg_entry_price:,.2f}, "
+                    f"TP: ${tp:,.2f}"
+                )
+
+        # Ошибки
+        error_details = ""
+        if self._period_error_types:
+            error_details = "  " + "\n  ".join(self._period_error_types[-5:])  # макс 5 типов
+
+        await self.notifier.notify_periodic_summary(
+            period_label="3 ЧАСА",
+            trades_opened=self._period_trades_opened,
+            trades_closed=self._period_trades_closed,
+            winning_pnl=self._period_winning_pnl,
+            losing_pnl=self._period_losing_pnl,
+            balance=balance,
+            errors_count=self._period_errors,
+            error_details=error_details,
+            uptime=uptime,
+            has_position=has_position,
+            position_info=position_info,
+        )
+
+        logger.info(
+            f"📊 Сводка отправлена: открыто={self._period_trades_opened}, "
+            f"закрыто={self._period_trades_closed}, ошибок={self._period_errors}"
+        )
+
+        # Сброс счётчиков
+        self._period_trades_opened = 0
+        self._period_trades_closed = 0
+        self._period_winning_pnl = 0.0
+        self._period_losing_pnl = 0.0
+        self._period_errors = 0
+        self._period_error_types.clear()
 
     async def _handle_telegram_stop(self):
         """Обработчик Telegram-команды /stop."""
