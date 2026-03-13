@@ -100,6 +100,12 @@ class BotEngine:
             risk_manager=self.risk_manager,
             entry_step_pct=config.trading.entry_step_pct,
             take_profit_pct=config.trading.take_profit_pct,
+            trailing_tp_enabled=config.trading.trailing_tp_enabled,
+            trailing_tp_activation_pct=config.trading.trailing_tp_activation_pct,
+            trailing_tp_callback_pct=config.trading.trailing_tp_callback_pct,
+            trend_filter_enabled=config.trading.trend_filter_enabled,
+            trend_rsi_min=config.trading.trend_rsi_min,
+            adaptive_sizing_enabled=config.trading.adaptive_sizing_enabled,
         )
 
         # Telegram
