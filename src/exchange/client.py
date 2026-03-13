@@ -38,7 +38,7 @@ class BybitClient:
             testnet=testnet,
             api_key=api_key,
             api_secret=api_secret,
-            recv_window=20000,
+            recv_window=30000,
         )
         mode = "TESTNET" if testnet else "MAINNET"
         logger.info(f"Bybit клиент инициализирован ({mode})")

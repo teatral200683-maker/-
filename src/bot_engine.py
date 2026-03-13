@@ -7,7 +7,7 @@ Bot Engine — Crypto Trader Bot
 import asyncio
 import signal
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, date, timedelta, timezone
 
 from config import Config, load_config, validate_config
 from exchange.client import BybitClient
@@ -39,6 +39,7 @@ class BotEngine:
         self._started_at: datetime = None
         self._session_trades: int = 0
         self._session_pnl: float = 0.0
+        self._tick_counter: int = 0
 
         # ── Счётчики для периодической сводки ──
         self._period_trades_opened: int = 0
@@ -168,8 +169,13 @@ class BotEngine:
         self._started_at = datetime.now(timezone.utc)
 
         logger.info("=" * 50)
-        logger.info("🤖 CRYPTO TRADER BOT v1.1")
+        logger.info("🤖 CRYPTO TRADER BOT v1.4")
         logger.info("=" * 50)
+
+        # Сохраняем состояние при старте
+        self.db.save_state("session_start", self._started_at.isoformat())
+        self.db.save_state("bot_version", "1.4")
+        self.db.save_state("bot_status", "running")
         logger.info(f"🛡️ Стоп-лосс: {self.config.trading.stop_loss_pct}%")
 
         # Предполётные проверки
@@ -245,6 +251,13 @@ class BotEngine:
             uptime=uptime,
         )
 
+        # Сохраняем финальное состояние
+        self.db.save_state("bot_status", "stopped")
+        self.db.save_state("last_stop_reason", reason)
+        self.db.save_state("last_stop_time", datetime.now(timezone.utc).isoformat())
+        self.db.save_state("session_trades", str(self._session_trades))
+        self.db.save_state("session_pnl", f"{self._session_pnl:.4f}")
+
         # Закрываем БД
         self.db.close()
         logger.info("Бот остановлен")
@@ -255,6 +268,17 @@ class BotEngine:
             return
 
         result = await self.strategy.on_price_update(price, ticker_data)
+
+        # Периодическое сохранение состояния (каждые 100 тиков)
+        self._tick_counter += 1
+        if self._tick_counter % 100 == 0:
+            try:
+                self.db.save_state("last_price", f"{price:.2f}")
+                self.db.save_state("session_trades", str(self._session_trades))
+                self.db.save_state("session_pnl", f"{self._session_pnl:.4f}")
+                self.db.save_state("last_tick_time", datetime.now(timezone.utc).isoformat())
+            except Exception as e:
+                logger.debug(f"Ошибка сохранения состояния: {e}")
 
         # Если произошла сделка — обновляем счётчики (без уведомлений)
         if result is not None:
@@ -351,6 +375,22 @@ class BotEngine:
             f"📊 Сводка отправлена: открыто={self._period_trades_opened}, "
             f"закрыто={self._period_trades_closed}, ошибок={self._period_errors}"
         )
+
+        # Сохраняем дневную статистику в БД
+        try:
+            from storage.models import DailyStats
+            net_pnl = self._period_winning_pnl + self._period_losing_pnl
+            daily = DailyStats(
+                date=date.today().isoformat(),
+                trades_closed=self._period_trades_closed,
+                total_pnl=net_pnl,
+                total_commission=0,
+                balance=balance,
+            )
+            self.db.save_daily_stats(daily)
+            logger.info(f"📊 Дневная статистика сохранена: {daily.date}")
+        except Exception as e:
+            logger.error(f"Ошибка сохранения daily_stats: {e}")
 
         # Сброс счётчиков
         self._period_trades_opened = 0

@@ -44,6 +44,8 @@ class TestOnPrice:
             engine._period_losing_pnl = 0.0
             engine._period_errors = 0
             engine._period_error_types = []
+            engine._tick_counter = 0
+            engine.db = MagicMock()
             return engine
 
     def test_no_action(self, mock_client, mock_notifier):

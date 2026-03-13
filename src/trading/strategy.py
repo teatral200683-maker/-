@@ -93,7 +93,7 @@ class TradingStrategy:
         if self.pm.has_position:
             if self.pm.should_take_profit(price):
                 logger.info(f"🎯 Тейк-профит! Цена ${price:,.2f} достигла цели")
-                trade = await self.pm.close_position(price)
+                trade = await self.pm.close_position(price, close_reason="take_profit")
                 if trade:
                     self._highest_price = price  # Сброс максимума
                     self._last_trade_time = time.time()
@@ -107,7 +107,7 @@ class TradingStrategy:
                     f"🛑 СТОП-ЛОСС! Цена ${price:,.2f} ≤ ${sl_price:,.2f} "
                     f"(-{self.pm.stop_loss_pct}% от средней ${self.pm.current_trade.avg_entry_price:,.2f})"
                 )
-                trade = await self.pm.close_position(price)
+                trade = await self.pm.close_position(price, close_reason="stop_loss")
                 if trade:
                     self._highest_price = price  # Сброс максимума
                     self._last_trade_time = time.time()

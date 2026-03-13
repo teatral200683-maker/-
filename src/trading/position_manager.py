@@ -248,12 +248,13 @@ class PositionManager:
 
         return entry
 
-    async def close_position(self, current_price: float) -> Optional[Trade]:
+    async def close_position(self, current_price: float, close_reason: str = "take_profit") -> Optional[Trade]:
         """
-        Закрыть текущую позицию (тейк-профит).
+        Закрыть текущую позицию.
 
         Args:
             current_price: Цена закрытия (ориентировочная)
+            close_reason: Причина закрытия (take_profit / stop_loss)
 
         Returns:
             Закрытый Trade или None
@@ -290,12 +291,22 @@ class PositionManager:
 
         logger.info(
             f"💰 СДЕЛКА ЗАКРЫТА #{trade.id}: "
+            f"причина={close_reason}, "
             f"выход ${exit_price:,.2f}, "
             f"PnL: ${trade.pnl:+,.2f}, "
             f"комиссия: ${total_commission:,.4f}, "
             f"чистый PnL: ${trade.net_pnl:+,.2f}, "
             f"входов: {trade.entries_count}"
         )
+
+        # Логирование причин убыточных сделок
+        if trade.net_pnl < 0:
+            logger.warning(
+                f"📉 УБЫТОЧНАЯ СДЕЛКА #{trade.id}: "
+                f"причина={close_reason}, входов={trade.entries_count}, "
+                f"avg=${trade.avg_entry_price:,.2f}, exit=${exit_price:,.2f}, "
+                f"PnL: ${trade.net_pnl:+,.2f}"
+            )
 
         self.current_trade = None
         self._accumulated_commission = 0.0
