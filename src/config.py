@@ -30,15 +30,6 @@ class TradingConfig:
     entry_step_pct: float = 2.0
     position_size_pct: float = 5.0
     working_deposit: float = 1000.0
-    # Trailing Take Profit
-    trailing_tp_enabled: bool = False
-    trailing_tp_activation_pct: float = 0.5  # Активация после +0.5%
-    trailing_tp_callback_pct: float = 0.3    # Откат от максимума для закрытия
-    # Фильтр тренда
-    trend_filter_enabled: bool = False
-    trend_rsi_min: int = 25              # Не входить если RSI ниже
-    # Адаптивный размер
-    adaptive_sizing_enabled: bool = False
 
 
 @dataclass

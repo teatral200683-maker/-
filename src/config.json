@@ -8,13 +8,7 @@
     "max_entries": 5,
     "entry_step_pct": 2.0,
     "position_size_pct": 5.0,
-    "working_deposit": 1000,
-    "trailing_tp_enabled": false,
-    "trailing_tp_activation_pct": 0.5,
-    "trailing_tp_callback_pct": 0.3,
-    "trend_filter_enabled": false,
-    "trend_rsi_min": 25,
-    "adaptive_sizing_enabled": false
+    "working_deposit": 1000
   },
   "risk": {
     "max_position_pct_of_balance": 95,

@@ -109,7 +109,6 @@ class RiskManager:
         position_size_pct: float,
         current_price: float,
         leverage: int = 4,
-        volatility_factor: float = 1.0,
     ) -> float:
         """
         Рассчитать объём входа в монетах.
@@ -119,7 +118,6 @@ class RiskManager:
             position_size_pct: Процент от депозита на один вход
             current_price: Текущая цена актива ($)
             leverage: Кредитное плечо
-            volatility_factor: Множитель волатильности (0.3–1.5, от ATR)
 
         Returns:
             Объём в монетах (напр. 0.20 ETH)
@@ -130,20 +128,11 @@ class RiskManager:
         # Объём в монетах (с учётом плеча)
         qty = (entry_usd * leverage) / current_price
 
-        # Адаптация к волатильности
-        if volatility_factor != 1.0:
-            original_qty = qty
-            qty = qty * volatility_factor
-            logger.debug(
-                f"Адаптивный размер: {original_qty:.4f} × {volatility_factor:.3f} = {qty:.4f}"
-            )
-
         # Округляем до 2 знаков (минимальный шаг ETH на Bybit)
         qty = round(qty, 2)
 
         logger.debug(
-            f"Расчёт размера: ${entry_usd:,.2f} × {leverage}x / ${current_price:,.2f} "
-            f"× vol={volatility_factor:.3f} = {qty} монет"
+            f"Расчёт размера: ${entry_usd:,.2f} × {leverage}x / ${current_price:,.2f} = {qty} монет"
         )
         return qty
 
