@@ -1,192 +1,124 @@
 """
-Загрузчик исторических данных из Bybit API — Crypto Trader Bot
+Загрузка исторических данных ETH/USDT с Bybit API.
 
-Скачивает OHLCV-свечи ETH/USDT и сохраняет в CSV.
-Не требует API-ключей (публичный эндпоинт).
+Скачивает 1-часовые свечи и сохраняет в CSV.
+Bybit поддерживает до 1000 свечей за запрос.
 
 Использование:
-    python download_data.py --symbol ETHUSDT --interval 60 --days 365 --output data/eth_1h.csv
-    python download_data.py --interval 15 --days 180
+    python download_data.py
 """
 
-import argparse
 import csv
+import time
 import os
 import sys
-import time
-from datetime import datetime, timedelta, timezone
-
-try:
-    import requests
-except ImportError:
-    print("❌ Установите requests: pip install requests")
-    sys.exit(1)
+from datetime import datetime, timezone
+import urllib.request
+import json
 
 
-BYBIT_KLINE_URL = "https://api.bybit.com/v5/market/kline"
-
-# Интервалы (минуты → строка API)
-INTERVALS = {
-    1: "1", 3: "3", 5: "5", 15: "15", 30: "30",
-    60: "60", 120: "120", 240: "240", 360: "360",
-    720: "720", 1440: "D", 10080: "W",
-}
+BYBIT_API = "https://api.bybit.com"
+SYMBOL = "ETHUSDT"
+INTERVAL = "60"  # 1 час
+LIMIT = 1000     # макс за запрос
 
 
-def download_klines(
-    symbol: str = "ETHUSDT",
-    interval: int = 60,
-    days: int = 365,
-    output: str = None,
-) -> str:
-    """
-    Скачать исторические свечи из Bybit API.
+def fetch_klines(start_ms: int, end_ms: int) -> list:
+    """Загрузить свечи с Bybit API."""
+    url = (
+        f"{BYBIT_API}/v5/market/kline"
+        f"?category=linear&symbol={SYMBOL}&interval={INTERVAL}"
+        f"&start={start_ms}&end={end_ms}&limit={LIMIT}"
+    )
 
-    Args:
-        symbol: Торговая пара
-        interval: Интервал в минутах (1, 5, 15, 60, 240, 1440)
-        days: Количество дней истории
-        output: Путь для сохранения CSV
+    try:
+        req = urllib.request.Request(url)
+        req.add_header("User-Agent", "CryptoBot-Backtest/1.0")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
 
-    Returns:
-        Путь к сохранённому файлу
-    """
-    if interval not in INTERVALS:
-        print(f"❌ Неподдерживаемый интервал: {interval}")
-        print(f"   Доступные: {list(INTERVALS.keys())}")
-        return ""
+        if data.get("retCode") != 0:
+            print(f"  ❌ API ошибка: {data.get('retMsg')}")
+            return []
 
-    interval_str = INTERVALS[interval]
+        return data.get("result", {}).get("list", [])
 
-    # Имя файла по умолчанию
-    if not output:
-        interval_name = {1: "1m", 5: "5m", 15: "15m", 60: "1h", 240: "4h", 1440: "1d"}.get(interval, f"{interval}m")
-        output = f"data/{symbol.lower()}_{interval_name}_{days}d.csv"
+    except Exception as e:
+        print(f"  ❌ Ошибка запроса: {e}")
+        return []
 
-    # Создаём директорию
-    os.makedirs(os.path.dirname(output) if os.path.dirname(output) else "data", exist_ok=True)
 
-    print(f"\n{'='*50}")
-    print(f"📥 ЗАГРУЗКА ДАННЫХ ИЗ BYBIT API")
-    print(f"{'='*50}")
-    print(f"  Пара:      {symbol}")
-    print(f"  Интервал:  {interval} мин")
-    print(f"  Период:    {days} дней")
-    print(f"  Файл:      {output}")
+def download_eth_2026():
+    """Скачать данные ETH/USDT за январь–март 2026."""
 
-    # Расчёт временных границ
-    end_ts = int(datetime.now(timezone.utc).timestamp() * 1000)
-    start_ts = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
+    start_dt = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    end_dt = datetime(2026, 3, 13, 23, 59, 59, tzinfo=timezone.utc)
+
+    start_ms = int(start_dt.timestamp() * 1000)
+    end_ms = int(end_dt.timestamp() * 1000)
+
+    print(f"📥 Загрузка ETH/USDT 1H свечей с Bybit")
+    print(f"   Период: {start_dt.strftime('%d.%m.%Y')} — {end_dt.strftime('%d.%m.%Y')}")
 
     all_candles = []
-    current_end = end_ts
-    batch = 0
+    current_end = end_ms
 
-    while current_end > start_ts:
-        batch += 1
-        params = {
-            "category": "linear",
-            "symbol": symbol,
-            "interval": interval_str,
-            "end": current_end,
-            "limit": 1000,
-        }
+    while current_end > start_ms:
+        candles = fetch_klines(start_ms, current_end)
+        if not candles:
+            break
 
-        try:
-            resp = requests.get(BYBIT_KLINE_URL, params=params, timeout=10)
-            data = resp.json()
+        all_candles.extend(candles)
+        print(f"  ✅ Получено {len(candles)} свечей, всего: {len(all_candles)}")
 
-            if data.get("retCode") != 0:
-                print(f"  ❌ Ошибка API: {data.get('retMsg')}")
-                break
+        oldest_ts = int(candles[-1][0])
+        current_end = oldest_ts - 1
 
-            klines = data["result"]["list"]
-            if not klines:
-                break
+        if len(candles) < LIMIT:
+            break
 
-            for k in klines:
-                ts = int(k[0])
-                if ts < start_ts:
-                    continue
-                all_candles.append({
-                    "timestamp": ts,
-                    "datetime": datetime.fromtimestamp(ts / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
-                    "open": float(k[1]),
-                    "high": float(k[2]),
-                    "low": float(k[3]),
-                    "close": float(k[4]),
-                    "volume": float(k[5]),
-                })
-
-            # Сдвигаем окно назад
-            current_end = int(klines[-1][0]) - 1
-
-            if batch % 5 == 0:
-                oldest = datetime.fromtimestamp(int(klines[-1][0]) / 1000, tz=timezone.utc)
-                print(f"  ▶ Пакет {batch}: {len(all_candles):,} свечей (до {oldest.strftime('%Y-%m-%d')})")
-
-            time.sleep(0.1)  # Не превышаем лимит API
-
-        except requests.RequestException as e:
-            print(f"  ⚠️ Ошибка запроса: {e}. Повтор через 3 сек...")
-            time.sleep(3)
-            continue
+        time.sleep(0.3)
 
     if not all_candles:
-        print("❌ Не удалось скачать данные")
-        return ""
+        print("❌ Не удалось загрузить данные")
+        return None
 
-    # Сортируем по времени (API отдаёт от новых к старым)
-    all_candles.sort(key=lambda x: x["timestamp"])
-
-    # Убираем дубликаты
+    # Убираем дубли и сортируем
     seen = set()
     unique = []
     for c in all_candles:
-        if c["timestamp"] not in seen:
-            seen.add(c["timestamp"])
+        ts = c[0]
+        if ts not in seen:
+            seen.add(ts)
             unique.append(c)
-    all_candles = unique
 
-    # Сохраняем в CSV
-    with open(output, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["datetime", "open", "high", "low", "close", "volume"])
-        writer.writeheader()
-        for c in all_candles:
-            writer.writerow({
-                "datetime": c["datetime"],
-                "open": c["open"],
-                "high": c["high"],
-                "low": c["low"],
-                "close": c["close"],
-                "volume": c["volume"],
-            })
+    unique.sort(key=lambda x: int(x[0]))
+    filtered = [c for c in unique if start_ms <= int(c[0]) <= end_ms]
 
-    period_start = all_candles[0]["datetime"][:10]
-    period_end = all_candles[-1]["datetime"][:10]
+    print(f"\n📊 Итого: {len(filtered)} уникальных свечей")
 
-    print(f"\n✅ Загружено {len(all_candles):,} свечей")
-    print(f"   Период: {period_start} — {period_end}")
-    print(f"   Файл:   {output}")
-    print(f"   Размер: {os.path.getsize(output) / 1024:.1f} КБ")
-    print(f"\n💡 Запуск бэктеста:")
-    print(f"   python backtester.py --data {output}")
+    # Сохранение CSV
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(output_dir, "eth_2026_1h.csv")
 
-    return output
+    with open(output_file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["timestamp", "open", "high", "low", "close", "volume"])
+        for c in filtered:
+            ts = datetime.utcfromtimestamp(int(c[0]) / 1000)
+            writer.writerow([ts.strftime("%Y-%m-%d %H:%M:%S"), c[1], c[2], c[3], c[4], c[5]])
 
+    print(f"✅ Сохранено: {output_file}")
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="📥 Загрузка исторических данных ETH/USDT из Bybit API",
-    )
-    parser.add_argument("--symbol", default="ETHUSDT", help="Торговая пара")
-    parser.add_argument("--interval", type=int, default=60, help="Интервал в минутах (1,5,15,60,240)")
-    parser.add_argument("--days", type=int, default=365, help="Количество дней истории")
-    parser.add_argument("--output", default=None, help="Путь для сохранения CSV")
+    if filtered:
+        first_price = float(filtered[0][4])
+        last_price = float(filtered[-1][4])
+        change_pct = (last_price - first_price) / first_price * 100
+        print(f"   Первая цена: ${first_price:,.2f}, Последняя: ${last_price:,.2f}, Изменение: {change_pct:+.1f}%")
 
-    args = parser.parse_args()
-    download_klines(args.symbol, args.interval, args.days, args.output)
+    return output_file
 
 
 if __name__ == "__main__":
-    main()
+    download_eth_2026()
