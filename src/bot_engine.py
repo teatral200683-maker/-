@@ -286,13 +286,13 @@ class BotEngine:
             except Exception as e:
                 logger.debug(f"Ошибка сохранения состояния: {e}")
 
-        # Если произошла сделка — обновляем счётчики (без уведомлений)
+        # Если произошла сделка — уведомление + обновление счётчиков
         if result is not None:
             from storage.models import Trade, Entry
 
             if isinstance(result, Trade):
                 if result.status == "closed":
-                    # Сделка закрыта
+                    # Сделка закрыта — уведомляем
                     self._session_trades += 1
                     self._session_pnl += result.net_pnl or 0
                     self._period_trades_closed += 1
@@ -301,13 +301,42 @@ class BotEngine:
                         self._period_winning_pnl += net
                     else:
                         self._period_losing_pnl += net
+
+                    await self.notifier.notify_exit(
+                        symbol=self.config.trading.symbol,
+                        side="Sell",
+                        qty=result.total_qty,
+                        entry_price=result.avg_entry_price,
+                        exit_price=result.exit_price,
+                        pnl=result.net_pnl or 0,
+                        entries_count=result.entries_count,
+                        close_reason=getattr(result, 'close_reason', 'unknown'),
+                    )
                 else:
-                    # Новая позиция
+                    # Новая позиция — уведомляем
                     self._period_trades_opened += 1
+                    entry = result.entries[0] if result.entries else None
+                    if entry:
+                        await self.notifier.notify_entry(
+                            symbol=self.config.trading.symbol,
+                            side="Buy",
+                            qty=entry.qty,
+                            price=entry.price,
+                            entry_number=1,
+                            avg_price=result.avg_entry_price,
+                        )
 
             elif isinstance(result, Entry):
-                # Усреднение — не считаем как отдельную сделку
-                pass
+                # Усреднение — тоже уведомляем
+                trade = self.position_manager.current_trade
+                await self.notifier.notify_entry(
+                    symbol=self.config.trading.symbol,
+                    side="Buy",
+                    qty=result.qty,
+                    price=result.price,
+                    entry_number=result.entry_number,
+                    avg_price=trade.avg_entry_price if trade else result.price,
+                )
 
     async def _on_ws_error(self, error_type: str, message: str, attempt: int):
         """Обработчик ошибок WebSocket — сразу в Telegram + копим для сводки."""
