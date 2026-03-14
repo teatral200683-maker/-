@@ -217,9 +217,11 @@ class BotEngine:
         # Регистрация Telegram-команд
         self.commander.on_stop(self._handle_telegram_stop)
         self.commander.on_status(self._handle_telegram_status)
+        self.commander.on_pnl(self._handle_telegram_pnl)
+        self.commander.on_config(self._handle_telegram_config)
 
         logger.info("🟢 Бот запущен и готов к торговле")
-        logger.info("Telegram-команды: /stop, /status, /help")
+        logger.info("Telegram-команды: /stop, /status, /pnl, /config, /help")
         logger.info("Press Ctrl+C для остановки")
 
         # Запуск WebSocket + Telegram-команды + периодическая сводка параллельно
@@ -587,3 +589,93 @@ class BotEngine:
         except Exception as e:
             logger.error(f"Ошибка формирования /status: {e}")
             return f"❌ Ошибка получения статуса: {e}"
+
+    async def _handle_telegram_pnl(self) -> str:
+        """Обработчик Telegram-команды /pnl."""
+        try:
+            cursor = self.db.conn.cursor()
+
+            today = date.today().isoformat()
+            week_ago = (date.today() - timedelta(days=7)).isoformat()
+            month_ago = (date.today() - timedelta(days=30)).isoformat()
+
+            # За сегодня
+            cursor.execute(
+                "SELECT COUNT(*) as cnt, COALESCE(SUM(net_pnl),0) as pnl "
+                "FROM trades WHERE status='closed' AND date(closed_at) = ?", (today,)
+            )
+            day = cursor.fetchone()
+            day_cnt, day_pnl = day["cnt"], day["pnl"]
+
+            # За неделю
+            cursor.execute(
+                "SELECT COUNT(*) as cnt, COALESCE(SUM(net_pnl),0) as pnl "
+                "FROM trades WHERE status='closed' AND date(closed_at) >= ?", (week_ago,)
+            )
+            week = cursor.fetchone()
+            week_cnt, week_pnl = week["cnt"], week["pnl"]
+
+            # За месяц
+            cursor.execute(
+                "SELECT COUNT(*) as cnt, COALESCE(SUM(net_pnl),0) as pnl "
+                "FROM trades WHERE status='closed' AND date(closed_at) >= ?", (month_ago,)
+            )
+            month = cursor.fetchone()
+            month_cnt, month_pnl = month["cnt"], month["pnl"]
+
+            # Всего
+            stats = self.db.get_total_stats()
+
+            def emoji(v): return "🟢" if v >= 0 else "🔴"
+
+            text = (
+                f"💰 <b>PnL Статистика</b>\n\n"
+                f"{emoji(day_pnl)} <b>Сегодня:</b> ${day_pnl:+,.2f} ({day_cnt} сделок)\n"
+                f"{emoji(week_pnl)} <b>Неделя:</b> ${week_pnl:+,.2f} ({week_cnt} сделок)\n"
+                f"{emoji(month_pnl)} <b>Месяц:</b> ${month_pnl:+,.2f} ({month_cnt} сделок)\n\n"
+                f"📊 <b>Всего:</b>\n"
+                f"  Сделок: {stats['total_trades']}\n"
+                f"  Win rate: {stats['win_rate']:.0f}%\n"
+                f"  Прибыль: ${stats['total_profit']:+,.2f}\n"
+                f"  Средняя: ${stats['avg_profit']:+,.2f}\n"
+            )
+            return text
+        except Exception as e:
+            logger.error(f"Ошибка /pnl: {e}")
+            return f"❌ Ошибка: {e}"
+
+    async def _handle_telegram_config(self) -> str:
+        """Обработчик Telegram-команды /config."""
+        try:
+            c = self.config
+            t = c.trading
+            r = c.risk
+
+            trail = "ВКЛ" if t.trailing_tp_enabled else "ВЫКЛ"
+            trend = "ВКЛ" if t.trend_filter_enabled else "ВЫКЛ"
+            adapt = "ВКЛ" if t.adaptive_sizing_enabled else "ВЫКЛ"
+            mode = "TESTNET" if c.bybit_testnet else "MAINNET"
+
+            text = (
+                f"⚙️ <b>НАСТРОЙКИ БОТА</b>\n\n"
+                f"🎯 <b>Торговля:</b>\n"
+                f"  Пара: {t.symbol}\n"
+                f"  Плечо: {t.leverage}x\n"
+                f"  ТP: +{t.take_profit_pct}%\n"
+                f"  SL: -{t.stop_loss_pct}%\n"
+                f"  Макс. входов: {t.max_entries}\n"
+                f"  Шаг DCA: {t.entry_step_pct}%\n"
+                f"  Размер: {t.position_size_pct}%\n\n"
+                f"🛡 <b>Риски:</b>\n"
+                f"  Anti-liquidation: {r.anti_liquidation_pct}%\n"
+                f"  Max daily loss: {r.max_daily_loss_pct}%\n\n"
+                f"🔧 <b>Модули:</b>\n"
+                f"  Trailing TP: {trail}\n"
+                f"  RSI фильтр: {trend} (min={t.trend_rsi_min})\n"
+                f"  Адаптивный размер: {adapt}\n\n"
+                f"🏭 Режим: <b>{mode}</b>\n"
+            )
+            return text
+        except Exception as e:
+            logger.error(f"Ошибка /config: {e}")
+            return f"❌ Ошибка: {e}"

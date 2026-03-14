@@ -2,7 +2,7 @@
 Telegram-команды — Crypto Trader Bot
 
 Обработка входящих команд из Telegram для управления ботом.
-Команды: /stop, /status, /help
+Команды: /stop, /status, /pnl, /config, /help
 """
 
 import asyncio
@@ -34,6 +34,8 @@ class TelegramCommander:
         # Callback-функции для команд
         self._on_stop: Optional[Callable[[], Awaitable]] = None
         self._on_status: Optional[Callable[[], Awaitable[str]]] = None
+        self._on_pnl: Optional[Callable[[], Awaitable[str]]] = None
+        self._on_config: Optional[Callable[[], Awaitable[str]]] = None
 
         if self._enabled:
             logger.info("✅ Telegram-команды включены")
@@ -45,6 +47,14 @@ class TelegramCommander:
     def on_status(self, callback: Callable[[], Awaitable[str]]):
         """Регистрация обработчика команды /status."""
         self._on_status = callback
+
+    def on_pnl(self, callback: Callable[[], Awaitable[str]]):
+        """Регистрация обработчика команды /pnl."""
+        self._on_pnl = callback
+
+    def on_config(self, callback: Callable[[], Awaitable[str]]):
+        """Регистрация обработчика команды /config."""
+        self._on_config = callback
 
     async def start(self):
         """Запуск polling для получения команд."""
@@ -136,6 +146,10 @@ class TelegramCommander:
             await self._cmd_stop()
         elif command == "/status":
             await self._cmd_status()
+        elif command == "/pnl":
+            await self._cmd_pnl()
+        elif command == "/config":
+            await self._cmd_config()
         elif command == "/help":
             await self._cmd_help()
         else:
@@ -162,11 +176,37 @@ class TelegramCommander:
         else:
             await self._reply("⚠️ Обработчик /status не настроен")
 
+    async def _cmd_pnl(self):
+        """Обработка команды /pnl."""
+        if self._on_pnl:
+            try:
+                pnl_text = await self._on_pnl()
+                await self._reply(pnl_text)
+            except Exception as e:
+                logger.error(f"Ошибка при обработке /pnl: {e}")
+                await self._reply(f"❌ Ошибка: {e}")
+        else:
+            await self._reply("⚠️ Обработчик /pnl не настроен")
+
+    async def _cmd_config(self):
+        """Обработка команды /config."""
+        if self._on_config:
+            try:
+                config_text = await self._on_config()
+                await self._reply(config_text)
+            except Exception as e:
+                logger.error(f"Ошибка при обработке /config: {e}")
+                await self._reply(f"❌ Ошибка: {e}")
+        else:
+            await self._reply("⚠️ Обработчик /config не настроен")
+
     async def _cmd_help(self):
         """Обработка команды /help."""
         text = (
             "📋 <b>КОМАНДЫ БОТА</b>\n\n"
             "/status — текущий статус\n"
+            "/pnl — PnL за день / неделю / месяц\n"
+            "/config — текущие настройки\n"
             "/stop — остановить бота\n"
             "/help — список команд\n"
         )
@@ -178,6 +218,7 @@ class TelegramCommander:
         payload = {
             "chat_id": self.chat_id,
             "text": text,
+            "parse_mode": "HTML",
         }
         try:
             async with aiohttp.ClientSession() as session:
