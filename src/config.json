@@ -18,11 +18,11 @@
     "adaptive_sizing_enabled": true
   },
   "grid": {
-    "grid_levels": 5,
-    "grid_step_pct": 0.15,
+    "grid_levels": 8,
+    "grid_step_pct": 0.5,
     "order_qty": 0.01,
-    "max_open_buys": 5,
-    "stop_loss_pct": 5.0
+    "max_open_buys": 6,
+    "stop_loss_pct": 4.0
   },
   "risk": {
     "max_position_pct_of_balance": 95,
@@ -45,4 +45,3 @@
     "log_file": "logs/bot.log"
   }
 }
-
