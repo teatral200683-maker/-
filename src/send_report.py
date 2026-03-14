@@ -3,18 +3,27 @@
 Запуск: python /opt/crypto-bot/send_report.py
 """
 import json
+import os
 import sqlite3
 import urllib.request
 from datetime import datetime, timezone, timedelta
 
 DB_PATH = "/opt/crypto-bot/data/trades.db"
-CONFIG_PATH = "/opt/crypto-bot/config.json"
+ENV_PATH = "/opt/crypto-bot/.env"
 
 MSK = timezone(timedelta(hours=3))
 
-def get_config():
-    with open(CONFIG_PATH, "r") as f:
-        return json.load(f)
+def load_env():
+    """Загрузить переменные из .env файла."""
+    env = {}
+    if os.path.exists(ENV_PATH):
+        with open(ENV_PATH, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, _, value = line.partition("=")
+                    env[key.strip()] = value.strip()
+    return env
 
 def send_telegram(token, chat_id, text):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -23,9 +32,9 @@ def send_telegram(token, chat_id, text):
     urllib.request.urlopen(req, timeout=10)
 
 def main():
-    cfg = get_config()
-    token = cfg.get("telegram_bot_token", "")
-    chat_id = cfg.get("telegram_chat_id", "")
+    env = load_env()
+    token = env.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = env.get("TELEGRAM_CHAT_ID", "")
 
     if not token or not chat_id:
         print("Telegram not configured")
@@ -58,13 +67,21 @@ def main():
     cur.execute("SELECT COUNT(*) as cnt FROM entries")
     total_entries = cur.fetchone()["cnt"]
 
-    # Статистика по дням
-    cur.execute("SELECT * FROM daily_stats ORDER BY date DESC LIMIT 7")
-    daily = cur.fetchall()
+    # Статистика по дням (может быть другая схема)
+    daily = []
+    try:
+        cur.execute("SELECT * FROM daily_stats ORDER BY date DESC LIMIT 7")
+        daily = cur.fetchall()
+    except Exception:
+        pass
 
     # Состояние бота
-    cur.execute("SELECT key, value FROM bot_state")
-    state = {r["key"]: r["value"] for r in cur.fetchall()}
+    state = {}
+    try:
+        cur.execute("SELECT key, value FROM bot_state")
+        state = {r["key"]: r["value"] for r in cur.fetchall()}
+    except Exception:
+        pass
 
     conn.close()
 
@@ -108,12 +125,17 @@ def main():
     if daily:
         lines.append("📅 <b>По дням (последние 7):</b>")
         for d in daily:
-            pnl = d["net_pnl"] or 0
-            emoji = "🟢" if pnl >= 0 else "🔴"
-            lines.append(
-                f"  {emoji} {d['date']}: ${pnl:+,.2f} "
-                f"({d['trades_closed'] or 0} сделок)"
-            )
+            try:
+                pnl = d["total_pnl"] or 0
+                emoji = "🟢" if pnl >= 0 else "🔴"
+                tc = d["trades_closed"] if "trades_closed" in d.keys() else 0
+                dt = d["date"] if "date" in d.keys() else "?"
+                lines.append(
+                    f"  {emoji} {dt}: ${pnl:+,.2f} "
+                    f"({tc or 0} сделок)"
+                )
+            except Exception:
+                pass
         lines.append("")
 
     # Состояние бота
