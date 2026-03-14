@@ -74,6 +74,7 @@ class TradingStrategy:
         self._last_price: float = 0.0
         self._highest_price: float = 0.0
         self._last_trade_time: float = 0.0
+        self._last_liq_check_time: float = 0.0  # Anti-liquidation: проверка каждые 10с
         self._initialized: bool = False
 
         trailing_status = "ВКЛ" if trailing_tp_enabled else "ВЫКЛ"
@@ -130,6 +131,30 @@ class TradingStrategy:
 
         # ── Логика выхода ──
         if self.pm.has_position:
+            # 0. Anti-liquidation guard (проверка каждые 10 секунд)
+            now = time.time()
+            if now - self._last_liq_check_time >= 10:
+                self._last_liq_check_time = now
+                try:
+                    position = self.pm.client.get_position(self.pm.symbol)
+                    liq_price = position.get("liqPrice") if position else None
+                    if liq_price:
+                        should_close, reason = self.risk.should_emergency_close(
+                            current_price=price, liq_price=liq_price
+                        )
+                        if should_close:
+                            logger.critical(reason)
+                            trade = await self.pm.close_position(
+                                price, close_reason="anti_liquidation"
+                            )
+                            if trade:
+                                self._reset_trailing()
+                                self._highest_price = price
+                                self._last_trade_time = now
+                                return trade
+                except Exception as e:
+                    logger.error(f"Ошибка проверки ликвидации: {e}")
+
             # 1. Trailing Take Profit (если включён)
             if self.trailing_tp_enabled:
                 result = await self._check_trailing_tp(price)

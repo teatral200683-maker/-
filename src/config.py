@@ -47,6 +47,7 @@ class RiskConfig:
     max_position_pct_of_balance: float = 95.0
     check_liquidation: bool = True
     allow_short: bool = False  # ВСЕГДА False — безопасность
+    anti_liquidation_pct: float = 30.0  # Запас до ликвидации (%) — закрыть если меньше
 
 
 @dataclass

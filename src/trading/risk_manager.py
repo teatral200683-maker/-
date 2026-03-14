@@ -26,15 +26,18 @@ class RiskManager:
         max_position_pct: float = 95.0,
         check_liquidation: bool = True,
         allow_short: bool = False,
+        liq_safety_pct: float = 30.0,
     ):
         self.max_entries = max_entries
         self.max_position_pct = max_position_pct
         self.check_liquidation = check_liquidation
         self.allow_short = False  # ВСЕГДА False — жёстко в коде
+        self.liq_safety_pct = liq_safety_pct  # Запас до ликвидации (%)
 
         logger.info(
             f"Риск-менеджер: max_entries={max_entries}, "
-            f"max_position={max_position_pct}%, check_liq={check_liquidation}"
+            f"max_position={max_position_pct}%, check_liq={check_liquidation}, "
+            f"anti_liq={liq_safety_pct}%"
         )
 
     def can_open_entry(
@@ -180,3 +183,45 @@ class RiskManager:
             return True
 
         return False
+
+    def should_emergency_close(
+        self,
+        current_price: float,
+        liq_price: float,
+        side: str = "Buy",
+    ) -> tuple[bool, str]:
+        """
+        Anti-liquidation guard — проверить, нужно ли экстренно закрыть позицию.
+
+        Если расстояние до ликвидации меньше liq_safety_pct% от текущей цены,
+        закрываем позицию с убытком, но СПАСАЕМ депозит.
+
+        Args:
+            current_price: Текущая цена
+            liq_price: Цена ликвидации (от биржи)
+            side: Направление позиции
+
+        Returns:
+            (нужно_закрыть: bool, причина: str)
+        """
+        if liq_price <= 0:
+            return False, ""
+
+        if side == "Buy":
+            # Long: ликвидация НИЖЕ текущей цены
+            if current_price <= liq_price:
+                return True, (
+                    f"🛑 ANTI-LIQUIDATION: цена ${current_price:,.2f} "
+                    f"НИЖЕ ликвидации ${liq_price:,.2f}! ЭКСТРЕННОЕ ЗАКРЫТИЕ!"
+                )
+
+            distance_pct = ((current_price - liq_price) / current_price) * 100
+
+            if distance_pct < self.liq_safety_pct:
+                return True, (
+                    f"🛑 ANTI-LIQUIDATION: цена ${current_price:,.2f} слишком близко "
+                    f"к ликвидации ${liq_price:,.2f} (запас {distance_pct:.1f}% < {self.liq_safety_pct}%). "
+                    f"ЭКСТРЕННОЕ ЗАКРЫТИЕ!"
+                )
+
+        return False, ""

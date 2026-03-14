@@ -80,6 +80,7 @@ class BotEngine:
             max_entries=config.trading.max_entries,
             max_position_pct=config.risk.max_position_pct_of_balance,
             check_liquidation=config.risk.check_liquidation,
+            liq_safety_pct=config.risk.anti_liquidation_pct,
         )
 
         # Управление позициями
