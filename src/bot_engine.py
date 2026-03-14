@@ -16,6 +16,7 @@ from storage.database import Database
 from trading.risk_manager import RiskManager
 from trading.position_manager import PositionManager
 from trading.strategy import TradingStrategy
+from trading.grid_strategy import GridStrategy
 from notifications.telegram import TelegramNotifier
 from notifications.commander import TelegramCommander
 from utils.logger import setup_logger, get_logger
@@ -102,19 +103,39 @@ class BotEngine:
             position_size_pct=config.trading.position_size_pct,
         )
 
-        # Торговая стратегия
-        self.strategy = TradingStrategy(
-            position_manager=self.position_manager,
-            risk_manager=self.risk_manager,
-            entry_step_pct=config.trading.entry_step_pct,
-            take_profit_pct=config.trading.take_profit_pct,
-            trailing_tp_enabled=config.trading.trailing_tp_enabled,
-            trailing_tp_activation_pct=config.trading.trailing_tp_activation_pct,
-            trailing_tp_callback_pct=config.trading.trailing_tp_callback_pct,
-            trend_filter_enabled=config.trading.trend_filter_enabled,
-            trend_rsi_min=config.trading.trend_rsi_min,
-            adaptive_sizing_enabled=config.trading.adaptive_sizing_enabled,
-        )
+        # Торговая стратегия (DCA или Grid)
+        strategy_type = getattr(config, 'strategy_type', 'dca')
+        if strategy_type == 'grid':
+            grid_cfg = getattr(config, 'grid', None)
+            self.strategy = GridStrategy(
+                client=self.client,
+                db=self.db,
+                risk_manager=self.risk_manager,
+                symbol=config.trading.symbol,
+                leverage=config.trading.leverage,
+                grid_levels=grid_cfg.grid_levels if grid_cfg else 5,
+                grid_step_pct=grid_cfg.grid_step_pct if grid_cfg else 0.5,
+                order_qty=grid_cfg.order_qty if grid_cfg else 0.01,
+                max_open_buys=grid_cfg.max_open_buys if grid_cfg else 5,
+                stop_loss_pct=grid_cfg.stop_loss_pct if grid_cfg else 5.0,
+            )
+            self._strategy_type = 'grid'
+            logger.info(f"📊 Стратегия: GRID ({grid_cfg.grid_levels if grid_cfg else 5} уровней, шаг {grid_cfg.grid_step_pct if grid_cfg else 0.5}%)")
+        else:
+            self.strategy = TradingStrategy(
+                position_manager=self.position_manager,
+                risk_manager=self.risk_manager,
+                entry_step_pct=config.trading.entry_step_pct,
+                take_profit_pct=config.trading.take_profit_pct,
+                trailing_tp_enabled=config.trading.trailing_tp_enabled,
+                trailing_tp_activation_pct=config.trading.trailing_tp_activation_pct,
+                trailing_tp_callback_pct=config.trading.trailing_tp_callback_pct,
+                trend_filter_enabled=config.trading.trend_filter_enabled,
+                trend_rsi_min=config.trading.trend_rsi_min,
+                adaptive_sizing_enabled=config.trading.adaptive_sizing_enabled,
+            )
+            self._strategy_type = 'dca'
+            logger.info("📊 Стратегия: DCA")
 
         # Telegram
         self.notifier = TelegramNotifier(

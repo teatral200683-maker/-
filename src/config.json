@@ -1,4 +1,5 @@
 {
+  "strategy_type": "grid",
   "trading": {
     "symbol": "ETHUSDT",
     "side": "Buy",
@@ -15,6 +16,13 @@
     "trend_filter_enabled": true,
     "trend_rsi_min": 25,
     "adaptive_sizing_enabled": true
+  },
+  "grid": {
+    "grid_levels": 5,
+    "grid_step_pct": 0.5,
+    "order_qty": 0.01,
+    "max_open_buys": 5,
+    "stop_loss_pct": 5.0
   },
   "risk": {
     "max_position_pct_of_balance": 95,
@@ -37,3 +45,4 @@
     "log_file": "logs/bot.log"
   }
 }
+

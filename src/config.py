@@ -71,6 +71,16 @@ class BotConfig:
 
 
 @dataclass
+class GridConfig:
+    """Параметры Grid-стратегии."""
+    grid_levels: int = 5
+    grid_step_pct: float = 0.5
+    order_qty: float = 0.01
+    max_open_buys: int = 5
+    stop_loss_pct: float = 5.0
+
+
+@dataclass
 class Config:
     """Главный конфигурационный класс."""
     # Секреты из .env
@@ -81,10 +91,12 @@ class Config:
     telegram_chat_id: str = ""
 
     # Параметры из config.json
+    strategy_type: str = "dca"  # "dca" или "grid"
     trading: TradingConfig = field(default_factory=TradingConfig)
     risk: RiskConfig = field(default_factory=RiskConfig)
     notifications: NotificationsConfig = field(default_factory=NotificationsConfig)
     bot: BotConfig = field(default_factory=BotConfig)
+    grid: GridConfig = field(default_factory=GridConfig)
 
 
 def load_config(
@@ -139,6 +151,13 @@ def load_config(
         # Bot
         if "bot" in data:
             config.bot = BotConfig(**data["bot"])
+
+        # Strategy type
+        config.strategy_type = data.get("strategy_type", "dca")
+
+        # Grid
+        if "grid" in data:
+            config.grid = GridConfig(**data["grid"])
     else:
         logger.warning(f"Файл config.json не найден: {json_file}, используются дефолтные параметры")
 
