@@ -27,18 +27,45 @@ class RiskManager:
         check_liquidation: bool = True,
         allow_short: bool = False,
         liq_safety_pct: float = 30.0,
+        max_daily_loss_pct: float = 3.0,
     ):
         self.max_entries = max_entries
         self.max_position_pct = max_position_pct
         self.check_liquidation = check_liquidation
         self.allow_short = False  # ВСЕГДА False — жёстко в коде
         self.liq_safety_pct = liq_safety_pct  # Запас до ликвидации (%)
+        self.max_daily_loss_pct = max_daily_loss_pct  # Макс. убыток за день (%)
 
         logger.info(
             f"Риск-менеджер: max_entries={max_entries}, "
             f"max_position={max_position_pct}%, check_liq={check_liquidation}, "
-            f"anti_liq={liq_safety_pct}%"
+            f"anti_liq={liq_safety_pct}%, max_daily_loss={max_daily_loss_pct}%"
         )
+
+    def is_daily_loss_exceeded(self, daily_pnl: float, balance: float) -> tuple[bool, str]:
+        """
+        Проверить, превышен ли дневной лимит убытков.
+
+        Args:
+            daily_pnl: PnL за текущий день ($)
+            balance: Текущий баланс ($)
+
+        Returns:
+            (превышен: bool, причина: str)
+        """
+        if self.max_daily_loss_pct <= 0 or balance <= 0:
+            return False, ""
+
+        max_loss = balance * (self.max_daily_loss_pct / 100)
+
+        if daily_pnl < 0 and abs(daily_pnl) >= max_loss:
+            return True, (
+                f"🛑 MAX DAILY LOSS: убыток за день ${daily_pnl:+,.2f} "
+                f"превысил лимит ${-max_loss:,.2f} ({self.max_daily_loss_pct}% от ${balance:,.2f}). "
+                f"Торговля приостановлена до завтра!"
+            )
+
+        return False, ""
 
     def can_open_entry(
         self,

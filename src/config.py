@@ -48,6 +48,7 @@ class RiskConfig:
     check_liquidation: bool = True
     allow_short: bool = False  # ВСЕГДА False — безопасность
     anti_liquidation_pct: float = 30.0  # Запас до ликвидации (%) — закрыть если меньше
+    max_daily_loss_pct: float = 3.0     # Макс. убыток за день (%) — стоп торговли
 
 
 @dataclass

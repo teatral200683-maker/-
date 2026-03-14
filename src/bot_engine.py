@@ -41,6 +41,12 @@ class BotEngine:
         self._session_pnl: float = 0.0
         self._tick_counter: int = 0
 
+        # ── Счётчики дневного PnL (Max daily loss) ──
+        self._daily_pnl: float = 0.0
+        self._daily_date: str = date.today().isoformat()
+        self._daily_loss_paused: bool = False
+        self._daily_balance_snapshot: float = 0.0  # Баланс на начало дня
+
         # ── Счётчики для периодической сводки ──
         self._period_trades_opened: int = 0
         self._period_trades_closed: int = 0
@@ -81,6 +87,7 @@ class BotEngine:
             max_position_pct=config.risk.max_position_pct_of_balance,
             check_liquidation=config.risk.check_liquidation,
             liq_safety_pct=config.risk.anti_liquidation_pct,
+            max_daily_loss_pct=config.risk.max_daily_loss_pct,
         )
 
         # Управление позициями
@@ -193,6 +200,7 @@ class BotEngine:
         # Уведомление в Telegram
         wallet = self.client.get_wallet_balance()
         balance = wallet.get("totalEquity", 0) if wallet else 0
+        self._daily_balance_snapshot = balance  # Баланс на начало дня для max daily loss
 
         await self.notifier.notify_bot_started(
             balance=balance,
@@ -274,6 +282,27 @@ class BotEngine:
         if not self._running:
             return
 
+        # ── Сброс дневных счётчиков в полночь (UTC) ──
+        today = date.today().isoformat()
+        if today != self._daily_date:
+            logger.info(
+                f"📅 Новый день ({today}). Сброс дневного PnL "
+                f"(вчера: ${self._daily_pnl:+,.2f})"
+            )
+            self._daily_date = today
+            self._daily_pnl = 0.0
+            self._daily_loss_paused = False
+            # Обновить баланс на начало дня
+            try:
+                wallet = self.client.get_wallet_balance()
+                self._daily_balance_snapshot = wallet.get("totalEquity", 0) if wallet else 0
+            except Exception:
+                pass
+
+        # ── Max daily loss check ──
+        if self._daily_loss_paused:
+            return  # Торговля приостановлена до завтра
+
         result = await self.strategy.on_price_update(price, ticker_data)
 
         # Периодическое сохранение состояния (каждые 100 тиков)
@@ -295,9 +324,10 @@ class BotEngine:
                 if result.status == "closed":
                     # Сделка закрыта — уведомляем
                     self._session_trades += 1
-                    self._session_pnl += result.net_pnl or 0
-                    self._period_trades_closed += 1
                     net = result.net_pnl or 0
+                    self._session_pnl += net
+                    self._daily_pnl += net
+                    self._period_trades_closed += 1
                     if net >= 0:
                         self._period_winning_pnl += net
                     else:
@@ -338,6 +368,26 @@ class BotEngine:
                         logger.info("📲 Уведомление о закрытии отправлено")
                     except Exception as e:
                         logger.error(f"❌ Ошибка отправки уведомления о закрытии: {e}", exc_info=True)
+
+                    # ── Проверка дневного лимита убытков ──
+                    balance_for_check = self._daily_balance_snapshot or balance or 10000
+                    exceeded, reason = self.risk_manager.is_daily_loss_exceeded(
+                        daily_pnl=self._daily_pnl,
+                        balance=balance_for_check,
+                    )
+                    if exceeded:
+                        logger.critical(reason)
+                        self._daily_loss_paused = True
+                        try:
+                            await self.notifier.notify_bot_stopped(
+                                reason=reason,
+                                balance=balance_for_check,
+                                session_trades=self._session_trades,
+                                session_pnl=self._session_pnl,
+                                uptime="—",
+                            )
+                        except Exception:
+                            pass
 
                 else:
                     # Новая позиция — уведомляем

@@ -23,6 +23,7 @@ class TestOnPrice:
         # Вместо реального BotEngine создаём облегчённый объект
         # который содержит ту же логику _on_price
         from bot_engine import BotEngine
+        from datetime import date
 
         with patch.object(BotEngine, '__init__', lambda self, cfg: None):
             engine = BotEngine.__new__(BotEngine)
@@ -34,9 +35,15 @@ class TestOnPrice:
             engine.position_manager = MagicMock()
             engine.risk_manager = MagicMock()
             engine.risk_manager.max_entries = 5
+            engine.risk_manager.is_daily_loss_exceeded = MagicMock(return_value=(False, ""))
             engine._running = True
             engine._session_trades = 0
             engine._session_pnl = 0.0
+            # Дневной лимит убытков
+            engine._daily_pnl = 0.0
+            engine._daily_date = date.today().isoformat()
+            engine._daily_loss_paused = False
+            engine._daily_balance_snapshot = 10000.0
             # Периодическая сводка
             engine._period_trades_opened = 0
             engine._period_trades_closed = 0
