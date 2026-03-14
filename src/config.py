@@ -194,8 +194,8 @@ def validate_config(config: Config) -> list[str]:
     if config.trading.position_size_pct <= 0 or config.trading.position_size_pct > 50:
         errors.append(f"❌ position_size_pct: {config.trading.position_size_pct} — должно быть 0.1–50.0")
 
-    if config.trading.working_deposit < 200:
-        errors.append(f"❌ working_deposit: ${config.trading.working_deposit} — минимум $200")
+    if config.trading.working_deposit < 50:
+        errors.append(f"❌ working_deposit: ${config.trading.working_deposit} — минимум $50")
 
     # ── Проверка безопасности ──────────────
     if config.risk.allow_short:

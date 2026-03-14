@@ -1,19 +1,14 @@
-import json
-import urllib.request
+import sqlite3
+import shutil
 
-token = "8375020207:AAFjYpamZkD3s9XfAZ334aQJ4jqpKPL251I"
+db_path = "/opt/crypto-bot/data/trades.db"
+shutil.copy(db_path, db_path + ".testnet.bak")
 
-commands = [
-    {"command": "status", "description": "Tekushiy status bota"},
-    {"command": "pnl", "description": "PnL za den/nedelyu/mesyac"},
-    {"command": "config", "description": "Tekushiye nastroyki"},
-    {"command": "stop", "description": "Ostanovit bota"},
-    {"command": "help", "description": "Spisok komand"},
-]
-
-url = f"https://api.telegram.org/bot{token}/setMyCommands"
-data = json.dumps({"commands": commands}).encode()
-req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-resp = urllib.request.urlopen(req, timeout=30)
-result = json.loads(resp.read())
-print("OK" if result.get("ok") else result)
+c = sqlite3.connect(db_path)
+# Close any open testnet trades
+r1 = c.execute("UPDATE trades SET status='closed' WHERE status='open'").rowcount
+# Clear bot state (strategy position tracking)
+r2 = c.execute("DELETE FROM bot_state").rowcount
+c.commit()
+print(f"Closed {r1} open trades, cleared {r2} state records")
+c.close()
