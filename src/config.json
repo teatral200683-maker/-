@@ -19,7 +19,7 @@
   },
   "grid": {
     "grid_levels": 5,
-    "grid_step_pct": 0.5,
+    "grid_step_pct": 0.15,
     "order_qty": 0.01,
     "max_open_buys": 5,
     "stop_loss_pct": 5.0

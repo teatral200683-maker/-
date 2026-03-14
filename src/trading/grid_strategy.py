@@ -42,7 +42,7 @@ class GridStrategy:
     5. Если цена выходит за границы сетки → пересчитываем сетку
     """
 
-    MIN_TRADE_INTERVAL = 30  # Минимальный интервал между сделками (сек)
+    MIN_TRADE_INTERVAL = 10  # Минимальный интервал между сделками (сек)
 
     def __init__(
         self,
@@ -81,6 +81,7 @@ class GridStrategy:
         self._avg_buy_price: float = 0.0  # Средняя цена покупки
         self._session_trades: int = 0
         self._session_pnl: float = 0.0
+        self._tick_count: int = 0  # Счётчик тиков для heartbeat
 
         logger.info(
             f"Grid-стратегия инициализирована: "
@@ -141,6 +142,18 @@ class GridStrategy:
 
         prev_price = self._last_price
         self._last_price = price
+
+        # Heartbeat — лог каждые 200 тиков + первые 5 тиков
+        self._tick_count += 1
+        if self._tick_count <= 5 or self._tick_count % 200 == 0:
+            nearest_buy = next(
+                (g for g in sorted(self._grid, key=lambda x: abs(x.price - price))
+                 if g.is_buy and not g.filled), None
+            )
+            buy_info = f", ближайший BUY: ${nearest_buy.price:,.2f}" if nearest_buy else ""
+            logger.info(
+                f"💓 Grid tick #{self._tick_count}: ${price:,.2f}{buy_info}"
+            )
 
         # Cooldown между сделками
         now = time.time()
