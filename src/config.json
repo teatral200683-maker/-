@@ -12,14 +12,16 @@
     "trailing_tp_enabled": false,
     "trailing_tp_activation_pct": 0.5,
     "trailing_tp_callback_pct": 0.3,
-    "trend_filter_enabled": false,
+    "trend_filter_enabled": true,
     "trend_rsi_min": 25,
-    "adaptive_sizing_enabled": false
+    "adaptive_sizing_enabled": true
   },
   "risk": {
     "max_position_pct_of_balance": 95,
     "check_liquidation": true,
-    "allow_short": false
+    "allow_short": false,
+    "anti_liquidation_pct": 30.0,
+    "max_daily_loss_pct": 3.0
   },
   "notifications": {
     "on_entry": true,
