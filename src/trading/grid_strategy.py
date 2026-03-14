@@ -58,6 +58,7 @@ class GridStrategy:
         # Безопасность
         max_open_buys: int = 5,     # Макс. кол-во открытых покупок
         stop_loss_pct: float = 5.0, # СЛ от нижней границы сетки
+        min_balance_stop: float = 50.0,  # Мин. баланс — при падении ниже стоп
     ):
         self.client = client
         self.db = db
@@ -70,8 +71,10 @@ class GridStrategy:
         self.order_qty = order_qty
         self.max_open_buys = max_open_buys
         self.stop_loss_pct = stop_loss_pct
+        self.min_balance_stop = min_balance_stop
 
         # Состояние
+        self._stopped: bool = False  # Флаг аварийной остановки
         self._grid: List[GridLevel] = []
         self._center_price: float = 0.0
         self._last_price: float = 0.0
@@ -142,6 +145,29 @@ class GridStrategy:
 
         prev_price = self._last_price
         self._last_price = price
+
+        # Если бот остановлен — не торгуем
+        if self._stopped:
+            return
+
+        # Проверка мин. баланса каждые 50 тиков
+        if self._tick_count % 50 == 0:
+            try:
+                wallet = self.client.get_wallet_balance()
+                if wallet:
+                    balance = wallet["totalEquity"]
+                    if balance < self.min_balance_stop:
+                        logger.critical(
+                            f"🚨 БАЛАНС ${balance:,.2f} < ${self.min_balance_stop:,.2f} — "
+                            f"АВАРИЙНАЯ ОСТАНОВКА!"
+                        )
+                        # Закрываем все позиции
+                        if self._total_bought > 0:
+                            await self._execute_stop_loss(price)
+                        self._stopped = True
+                        return
+            except Exception as e:
+                logger.error(f"Ошибка проверки баланса: {e}")
 
         # Heartbeat — лог каждые 200 тиков + первые 5 тиков
         self._tick_count += 1
