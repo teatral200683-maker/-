@@ -5,12 +5,16 @@ Telegram-уведомления — Crypto Trader Bot
 """
 
 import asyncio
+import os
 from typing import Optional
 from datetime import datetime, timezone
 
 from utils.logger import get_logger
 
 logger = get_logger("notifier")
+
+# URL Telegram Bot API — можно заменить через env для обхода блокировки
+TELEGRAM_API_URL = os.environ.get("TELEGRAM_API_URL", "https://api.telegram.org")
 
 
 class TelegramNotifier:
@@ -22,9 +26,13 @@ class TelegramNotifier:
         self.bot_token = bot_token
         self.chat_id = chat_id
         self._enabled = bool(bot_token and chat_id)
+        self._api_url = TELEGRAM_API_URL
 
         if self._enabled:
-            logger.info("✅ Telegram-уведомления включены")
+            if self._api_url != "https://api.telegram.org":
+                logger.info(f"✅ Telegram через прокси: {self._api_url}")
+            else:
+                logger.info("✅ Telegram-уведомления включены")
         else:
             logger.warning("⚠️ Telegram-уведомления отключены (не указан токен или chat_id)")
 
@@ -34,7 +42,7 @@ class TelegramNotifier:
             return
 
         import aiohttp
-        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        url = f"{self._api_url}/bot{self.bot_token}/sendMessage"
         payload = {
             "chat_id": self.chat_id,
             "text": text,

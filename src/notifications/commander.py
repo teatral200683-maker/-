@@ -6,6 +6,7 @@ Telegram-команды — Crypto Trader Bot
 """
 
 import asyncio
+import os
 from typing import Optional, Callable, Awaitable
 from datetime import datetime
 
@@ -13,6 +14,9 @@ import aiohttp
 from utils.logger import get_logger
 
 logger = get_logger("tg_cmd")
+
+# URL Telegram Bot API — можно заменить через env для обхода блокировки
+TELEGRAM_API_URL = os.environ.get("TELEGRAM_API_URL", "https://api.telegram.org")
 
 
 class TelegramCommander:
@@ -29,7 +33,8 @@ class TelegramCommander:
         self.chat_id = str(chat_id)
         self._enabled = bool(bot_token and chat_id)
         self._running = False
-        self._offset: int = 0  # offset для getUpdates (пропуск старых сообщений)
+        self._offset: int = 0
+        self._api_url = TELEGRAM_API_URL
 
         # Callback-функции для команд
         self._on_stop: Optional[Callable[[], Awaitable]] = None
@@ -84,7 +89,7 @@ class TelegramCommander:
     async def _skip_old_updates(self):
         """Пропустить все накопившиеся обновления (чтобы не реагировать на старые команды)."""
         try:
-            url = f"https://api.telegram.org/bot{self.bot_token}/getUpdates"
+            url = f"{self._api_url}/bot{self.bot_token}/getUpdates"
             params = {"offset": -1, "limit": 1}
 
             async with aiohttp.ClientSession() as session:
@@ -214,7 +219,7 @@ class TelegramCommander:
 
     async def _reply(self, text: str):
         """Отправить ответ в Telegram."""
-        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        url = f"{self._api_url}/bot{self.bot_token}/sendMessage"
         payload = {
             "chat_id": self.chat_id,
             "text": text,

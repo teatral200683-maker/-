@@ -1,9 +1,19 @@
 import json
-with open('/opt/crypto-bot/config.json', 'r') as f:
-    cfg = json.load(f)
-if 'risk' not in cfg:
-    cfg['risk'] = {}
-cfg['risk']['max_daily_loss_pct'] = 3.0
-with open('/opt/crypto-bot/config.json', 'w') as f:
-    json.dump(cfg, f, indent=4)
-print('max_daily_loss_pct =', cfg['risk']['max_daily_loss_pct'])
+import urllib.request
+
+token = "8375020207:AAFjYpamZkD3s9XfAZ334aQJ4jqpKPL251I"
+
+commands = [
+    {"command": "status", "description": "Tekushiy status bota"},
+    {"command": "pnl", "description": "PnL za den/nedelyu/mesyac"},
+    {"command": "config", "description": "Tekushiye nastroyki"},
+    {"command": "stop", "description": "Ostanovit bota"},
+    {"command": "help", "description": "Spisok komand"},
+]
+
+url = f"https://api.telegram.org/bot{token}/setMyCommands"
+data = json.dumps({"commands": commands}).encode()
+req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+resp = urllib.request.urlopen(req, timeout=30)
+result = json.loads(resp.read())
+print("OK" if result.get("ok") else result)
