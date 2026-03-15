@@ -236,6 +236,9 @@ class BybitClient:
             logger.error("🛑 ЗАПРЕТ: нельзя открывать SELL без reduce_only (защита от шорта)")
             raise ValueError("Шорт запрещён! Для закрытия позиции используйте reduce_only=True")
 
+        # ── Защита от float-артефактов: всегда 2 знака ──
+        qty = f"{float(qty):.2f}"
+
         params = {
             "category": "linear",
             "symbol": symbol,

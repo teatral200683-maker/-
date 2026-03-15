@@ -116,7 +116,7 @@ class PositionManager:
         order_id = self.client.place_order(
             symbol=self.symbol,
             side="Buy",
-            qty=str(qty),
+            qty=f"{qty:.2f}",
             order_type="Market",
         )
 
@@ -215,7 +215,7 @@ class PositionManager:
         order_id = self.client.place_order(
             symbol=self.symbol,
             side="Buy",
-            qty=str(qty),
+            qty=f"{qty:.2f}",
             order_type="Market",
         )
 
@@ -270,7 +270,7 @@ class PositionManager:
         order_id = self.client.place_order(
             symbol=self.symbol,
             side="Sell",
-            qty=str(close_qty),
+            qty=f"{close_qty:.2f}",
             order_type="Market",
             reduce_only=True,  # ВАЖНО: только закрытие, не шорт!
         )
