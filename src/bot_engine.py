@@ -236,13 +236,14 @@ class BotEngine:
         self.ws.on_error(self._on_ws_error)
 
         # Регистрация Telegram-команд
+        self.commander.on_start(self._handle_telegram_start)
         self.commander.on_stop(self._handle_telegram_stop)
         self.commander.on_status(self._handle_telegram_status)
         self.commander.on_pnl(self._handle_telegram_pnl)
         self.commander.on_config(self._handle_telegram_config)
 
         logger.info("🟢 Бот запущен и готов к торговле")
-        logger.info("Telegram-команды: /stop, /status, /pnl, /config, /help")
+        logger.info("Telegram-команды: /start, /stop, /status, /pnl, /config, /help")
         logger.info("Press Ctrl+C для остановки")
 
         # Запуск WebSocket + Telegram-команды + периодическая сводка параллельно
@@ -556,6 +557,37 @@ class BotEngine:
         """Обработчик Telegram-команды /stop."""
         logger.info("🛑 Получена команда /stop из Telegram")
         await self.stop("Команда /stop из Telegram")
+
+    async def _handle_telegram_start(self) -> str:
+        """Обработчик Telegram-команды /start."""
+        if self._daily_loss_paused:
+            self._daily_loss_paused = False
+            self._daily_pnl = 0.0
+            logger.info("▶️ Торговля возобновлена по команде /start")
+            return (
+                "▶️ <b>Торговля возобновлена!</b>\n\n"
+                "Дневной лимит убытков сброшен.\n"
+                "Бот снова активно торгует."
+            )
+
+        if not self._running:
+            return "⚠️ Бот остановлен. Используйте systemctl restart crypto-bot на VPS."
+
+        # uptime
+        uptime = ""
+        if self._started_at:
+            delta = datetime.now(timezone.utc) - self._started_at
+            hours, remainder = divmod(int(delta.total_seconds()), 3600)
+            minutes = remainder // 60
+            uptime = f"{hours}ч {minutes}мин"
+
+        return (
+            "✅ <b>Бот уже работает!</b>\n\n"
+            f"📊 Сделок за сессию: {self._session_trades}\n"
+            f"💰 PnL: ${self._session_pnl:+,.2f}\n"
+            f"⏰ Uptime: {uptime}\n\n"
+            "💡 /stop — остановить | /status — подробнее"
+        )
 
     async def _handle_telegram_status(self) -> str:
         """Обработчик Telegram-команды /status."""

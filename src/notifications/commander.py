@@ -2,7 +2,7 @@
 Telegram-команды — Crypto Trader Bot
 
 Обработка входящих команд из Telegram для управления ботом.
-Команды: /stop, /status, /pnl, /config, /help
+Команды: /start, /stop, /status, /pnl, /config, /help
 """
 
 import asyncio
@@ -38,12 +38,17 @@ class TelegramCommander:
 
         # Callback-функции для команд
         self._on_stop: Optional[Callable[[], Awaitable]] = None
+        self._on_start: Optional[Callable[[], Awaitable[str]]] = None
         self._on_status: Optional[Callable[[], Awaitable[str]]] = None
         self._on_pnl: Optional[Callable[[], Awaitable[str]]] = None
         self._on_config: Optional[Callable[[], Awaitable[str]]] = None
 
         if self._enabled:
             logger.info("✅ Telegram-команды включены")
+
+    def on_start(self, callback: Callable[[], Awaitable[str]]):
+        """Регистрация обработчика команды /start."""
+        self._on_start = callback
 
     def on_stop(self, callback: Callable[[], Awaitable]):
         """Регистрация обработчика команды /stop."""
@@ -147,7 +152,9 @@ class TelegramCommander:
 
         logger.info(f"📩 Telegram-команда: {command}")
 
-        if command == "/stop":
+        if command == "/start":
+            await self._cmd_start()
+        elif command == "/stop":
             await self._cmd_stop()
         elif command == "/status":
             await self._cmd_status()
@@ -159,6 +166,18 @@ class TelegramCommander:
             await self._cmd_help()
         else:
             await self._reply(f"❓ Неизвестная команда: {command}\nНапишите /help для списка команд.")
+
+    async def _cmd_start(self):
+        """Обработка команды /start."""
+        if self._on_start:
+            try:
+                result = await self._on_start()
+                await self._reply(result)
+            except Exception as e:
+                logger.error(f"Ошибка при обработке /start: {e}")
+                await self._reply(f"❌ Ошибка: {e}")
+        else:
+            await self._reply("✅ Бот уже работает!")
 
     async def _cmd_stop(self):
         """Обработка команды /stop."""
@@ -209,10 +228,11 @@ class TelegramCommander:
         """Обработка команды /help."""
         text = (
             "📋 <b>КОМАНДЫ БОТА</b>\n\n"
+            "/start — запустить/возобновить торговлю\n"
+            "/stop — остановить бота\n"
             "/status — текущий статус\n"
             "/pnl — PnL за день / неделю / месяц\n"
             "/config — текущие настройки\n"
-            "/stop — остановить бота\n"
             "/help — список команд\n"
         )
         await self._reply(text)
